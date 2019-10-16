@@ -41,14 +41,15 @@ private:
   struct libusb_device_descriptor desc;
   std::string SerialNumber;
 
-  bool isExploited(char SerialNumber[256]);
-
 public:
   DFU() {
     devh = nullptr;
     int r = libusb_init(nullptr);
     assert(r == 0);
   };
+
+  bool isExploited();
+  
   bool acquire_device();
   void release_device();
   void usb_reset();

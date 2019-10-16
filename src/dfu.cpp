@@ -6,9 +6,24 @@
 #include <string>
 #include <time.h>
 
-bool DFU::isExploited(char SerialNumber[256]) {
-  std::string SN = SerialNumber + '\0';
-  if (SN.find("PWND:[") != std::string::npos)
+void printBuffer(std::vector<uint8_t> &V) {
+	printf("Buffer (%ld): ", V.size());
+	for (int i=0;i<V.size();i++) {
+		printf("%02X", V[i]);
+	}
+	printf("\n");
+}
+
+void printBuffer(uint8_t *V, int Size) {
+	printf("Buffer (%ld): ", Size);
+	for (int i=0;i<Size;i++) {
+		printf("%02X", V[i]);
+	}
+	printf("\n");
+}
+
+bool DFU::isExploited() {
+  if (SerialNumber.find("PWND:[") != std::string::npos)
     return true;
 
   return false;
@@ -21,15 +36,17 @@ bool DFU::acquire_device() {
     exit(1);
   }
 
+  /*
   int r = libusb_claim_interface(devh, 0);
   if (r < 0) {
     printf("[!] usb_claim_interface error %d\n", r);
     exit(1);
   }
+  */
 
   device = libusb_get_device(devh);
 
-  r = libusb_get_device_descriptor(device, &desc);
+  int r = libusb_get_device_descriptor(device, &desc);
   if (r < 0) {
     printf("[!] libusb_get_device_descriptor error %d\n", r);
     exit(1);
@@ -48,7 +65,7 @@ bool DFU::acquire_device() {
   std::cout << "[*] Device Serial Number: " << this->SerialNumber << "\n";
 
   // Check if already exploited
-  if (isExploited(SerialNumber)) {
+  if (isExploited()) {
     printf("[!] Device is already exploited! Aborting!\n");
     exit(1);
     return false;
@@ -132,8 +149,10 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
   append(Request, (uint16_t)data.size());
   assert(Request.size() == 8);
   appendV(Request, data);
-
   auto rawRequest = libusb1_create_ctrl_transfer(Request, request_timeout);
+
+  printBuffer(Request);
+
   int r = libusb_submit_transfer(rawRequest);
   if (r) {
     printf("[!] libusb_submit_transfer failed! %d %s\n", r,
@@ -143,13 +162,18 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
 
   // Wait for timeout
   int i = 0;
-  double t = (timeout / 1000.0);
+  int t = (timeout / 1000.0);
   while ((time(nullptr) - start) < t) {
-    i += 1;
+  	i++;
   }
+  printf("Wait  ... %i\n", i);
 
   r = libusb_cancel_transfer(rawRequest);
-  assert(r == 0);
+  if (r) {
+    printf("[!] libusb_cancel_transfer failed! %d %s\n", r,
+           libusb_strerror((libusb_error)r));
+    exit(1);
+  }
 
   return true;
 }
@@ -160,20 +184,23 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
                                          size_t length, int timeout) {
 
   int r = 0;
+  printf("libusb1_no_error_ctrl_transfer:\n");
   if (data == nullptr) {
+    //r = libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
+    //                            wIndex, (uint8_t *)length, 0, timeout);
     r = libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
-                                wIndex, (uint8_t *)length, 0, timeout);
+                                wIndex, 0, length, timeout);
     // assert(r == 0);
     // ignore errors!
   } else {
-
+    printBuffer(data, length);
     r = libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
                                 wIndex, data, (uint16_t)length, timeout);
   }
   if (r) {
     printf("[!] ctrl transfer ERROR: %d %d %d\n", bmRequestType, bRequest, r);
   } else {
-    printf("[!] ctrl transfer good: %d %d\n", bmRequestType, bRequest);
+    printf("[!] ctrl transfer good: %d %d %d\n", bmRequestType, bRequest, r);
   }
 
   return false;

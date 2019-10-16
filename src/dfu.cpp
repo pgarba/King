@@ -6,8 +6,12 @@
 #include <string>
 #include <time.h>
 
+
 void printBuffer(std::vector<uint8_t> &V) {
-	printf("Buffer (%ld): ", V.size());
+#ifndef DEBUG
+	return;
+#endif
+	printf("Buffer (%d): ", (int) V.size());
 	for (int i=0;i<V.size();i++) {
 		printf("%02X", V[i]);
 	}
@@ -15,7 +19,10 @@ void printBuffer(std::vector<uint8_t> &V) {
 }
 
 void printBuffer(uint8_t *V, int Size) {
-	printf("Buffer (%ld): ", Size);
+#ifndef DEBUG
+	return;
+#endif
+	printf("Buffer (%d): ", (int) Size);
 	for (int i=0;i<Size;i++) {
 		printf("%02X", V[i]);
 	}
@@ -35,14 +42,6 @@ bool DFU::acquire_device() {
     printf("[!] Could not find device in DFU mode!\n");
     exit(1);
   }
-
-  /*
-  int r = libusb_claim_interface(devh, 0);
-  if (r < 0) {
-    printf("[!] usb_claim_interface error %d\n", r);
-    exit(1);
-  }
-  */
 
   device = libusb_get_device(devh);
 
@@ -79,20 +78,10 @@ void DFU::release_device() {
   libusb_close(devh);
   devh = nullptr;
   device = nullptr;
-  // libusb_exit(NULL);
-  /*
-  // DO nothing
-  if (usbHandle) {
-    usbDriver.Free(usbHandle);
-    usbHandle = nullptr;
-  }
-  */
 }
 
 void DFU::usb_reset() {
-  // usbDriver.ResetDevice(usbHandle);  )
   int Result = libusb_reset_device(this->devh);
-  assert(Result == 0);
 }
 
 void DFU::stall() {
@@ -166,7 +155,6 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
   while ((time(nullptr) - start) < t) {
   	i++;
   }
-  printf("Wait  ... %i\n", i);
 
   r = libusb_cancel_transfer(rawRequest);
   if (r) {
@@ -186,21 +174,12 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
   int r = 0;
   printf("libusb1_no_error_ctrl_transfer:\n");
   if (data == nullptr) {
-    //r = libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
-    //                            wIndex, (uint8_t *)length, 0, timeout);
     r = libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
                                 wIndex, 0, length, timeout);
-    // assert(r == 0);
-    // ignore errors!
   } else {
     printBuffer(data, length);
     r = libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
                                 wIndex, data, (uint16_t)length, timeout);
-  }
-  if (r) {
-    printf("[!] ctrl transfer ERROR: %d %d %d\n", bmRequestType, bRequest, r);
-  } else {
-    printf("[!] ctrl transfer good: %d %d %d\n", bmRequestType, bRequest, r);
   }
 
   return false;

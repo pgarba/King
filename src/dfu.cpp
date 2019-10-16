@@ -63,13 +63,6 @@ bool DFU::acquire_device() {
   this->SerialNumber = SerialNumber;
   std::cout << "[*] Device Serial Number: " << this->SerialNumber << "\n";
 
-  // Check if already exploited
-  if (isExploited()) {
-    printf("[!] Device is already exploited! Aborting!\n");
-    exit(1);
-    return false;
-  }
-
   return true;
 }
 
@@ -80,7 +73,9 @@ void DFU::release_device() {
   device = nullptr;
 }
 
-void DFU::usb_reset() { int Result = libusb_reset_device(this->devh); }
+void DFU::usb_reset() { 
+	int Result = libusb_reset_device(this->devh); 
+}
 
 void DFU::stall() {
   std::vector<uint8_t> Buffer;
@@ -170,7 +165,7 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
                                          size_t length, int timeout) {
 
   if (data == nullptr) {
-    // Crash on Windows (Unknown why ...)
+    // Crash on Windows (Unknown why ...) but this is the only way it works!
     libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
                             0, length, timeout);
   } else {

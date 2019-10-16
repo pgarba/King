@@ -1,8 +1,8 @@
 #ifndef DFU_H
 #define DFU_H
 
-#include <libusb-1.0/libusb.h>
 #include <assert.h>
+#include <libusb-1.0/libusb.h>
 #include <string>
 #include <vector>
 
@@ -49,7 +49,7 @@ public:
   };
 
   bool isExploited();
-  
+
   bool acquire_device();
   void release_device();
   void usb_reset();
@@ -69,7 +69,7 @@ public:
   bool libusb1_no_error_ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest,
                                       uint16_t wValue, uint16_t wIndex,
                                       uint8_t *data, size_t length,
-                                      int timeout);  
+                                      int timeout);
 };
 
 #endif

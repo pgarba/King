@@ -6,27 +6,26 @@
 #include <string>
 #include <time.h>
 
-
 void printBuffer(std::vector<uint8_t> &V) {
 #ifndef DEBUG
-	return;
+  return;
 #endif
-	printf("Buffer (%d): ", (int) V.size());
-	for (int i=0;i<V.size();i++) {
-		printf("%02X", V[i]);
-	}
-	printf("\n");
+  printf("Buffer (%d): ", (int)V.size());
+  for (int i = 0; i < V.size(); i++) {
+    printf("%02X", V[i]);
+  }
+  printf("\n");
 }
 
 void printBuffer(uint8_t *V, int Size) {
 #ifndef DEBUG
-	return;
+  return;
 #endif
-	printf("Buffer (%d): ", (int) Size);
-	for (int i=0;i<Size;i++) {
-		printf("%02X", V[i]);
-	}
-	printf("\n");
+  printf("Buffer (%d): ", (int)Size);
+  for (int i = 0; i < Size; i++) {
+    printf("%02X", V[i]);
+  }
+  printf("\n");
 }
 
 bool DFU::isExploited() {
@@ -57,6 +56,7 @@ bool DFU::acquire_device() {
                                          sizeof(SerialNumber));
   if (r < 0) {
     printf("[!] libusb_get_string_descriptor_ascii error %d\n", r);
+    return true;
     exit(1);
   }
 
@@ -80,9 +80,7 @@ void DFU::release_device() {
   device = nullptr;
 }
 
-void DFU::usb_reset() {
-  int Result = libusb_reset_device(this->devh);
-}
+void DFU::usb_reset() { int Result = libusb_reset_device(this->devh); }
 
 void DFU::stall() {
   std::vector<uint8_t> Buffer;
@@ -153,7 +151,7 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
   int i = 0;
   int t = (timeout / 1000.0);
   while ((time(nullptr) - start) < t) {
-  	i++;
+    i++;
   }
 
   r = libusb_cancel_transfer(rawRequest);
@@ -171,15 +169,14 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
                                          uint16_t wIndex, uint8_t *data,
                                          size_t length, int timeout) {
 
-  int r = 0;
-  printf("libusb1_no_error_ctrl_transfer:\n");
   if (data == nullptr) {
-    r = libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
-                                wIndex, 0, length, timeout);
+    // Crash on Windows (Unknown why ...)
+    libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
+                            0, length, timeout);
   } else {
     printBuffer(data, length);
-    r = libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
-                                wIndex, data, (uint16_t)length, timeout);
+    libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
+                            data, (uint16_t)length, timeout);
   }
 
   return false;

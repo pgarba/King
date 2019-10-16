@@ -7,7 +7,7 @@ if(DEFINED WIN32)
 	SET(LIBUSB10_PATH "c:/checkm8/libusb_win/" CACHE PATH "Path to libusb1-0 directory")
 endif()
 
-set(SOURCE_FILES src/main.cpp src/dfu.cpp)
+set(SOURCE_FILES src/main.cpp src/dfu.cpp src/usbexec.cpp)
 
 add_executable(king ${SOURCE_FILES})
 

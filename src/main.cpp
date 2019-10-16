@@ -386,5 +386,9 @@ int main(int argc, char *argv[]) {
     printf("[!] Exploit failed! :(\n");
   }
   D.release_device();
+
+  // Demote device
+  
+  
   return 0;
 }

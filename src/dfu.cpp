@@ -316,11 +316,6 @@ void DFU::send_data(vector<uint8_t> data) {
     vector<uint8_t> response;
     auto r = my_libusb_control_transfer(this->devh, 0x21, 1, 0, 0,
                                      &data.data()[index], amount, 5000, response);
-
-    /*
-    auto r = libusb_control_transfer(this->devh, 0x21, 1, 0, 0,
-                                     &data.data()[index], amount, 5000);
-    */
     assert(r == amount);
 
     index += amount;

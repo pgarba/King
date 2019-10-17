@@ -4,7 +4,7 @@
 
 static void printBuffer(std::vector<uint8_t> &V) {
 #ifndef DEBUG
-  return;
+	return;
 #endif
   printf("Buffer (%d): ", (int)V.size());
   for (int i = 0; i < V.size(); i++) {
@@ -15,7 +15,7 @@ static void printBuffer(std::vector<uint8_t> &V) {
 
 static void printBuffer(uint8_t *V, int Size) {
 #ifndef DEBUG
-  return;
+	return;
 #endif
   printf("Buffer (%d): ", (int)Size);
   for (int i = 0; i < Size; i++) {
@@ -148,6 +148,9 @@ vector<uint8_t> USBEXEC::read_memory(uint64_t address, int length) {
 
 void USBEXEC::write_memory(uint64_t address, vector<uint8_t> data) {
   auto cmd_mcp = this->cmd_memcpy(address, cmd_data_address(3), data.size());
+  appendV(cmd_mcp, data);
+  printBuffer(cmd_mcp);
+
   auto R = this->command(cmd_mcp, 0);
 }
 
@@ -173,5 +176,5 @@ void USBEXEC::write_memory_uint32(uint64_t address, uint32_t value) {
   vector<uint8_t> Mem;
   append(Mem, value);
 
-  this->write_memory(value, Mem);
+  this->write_memory(address, Mem);
 }

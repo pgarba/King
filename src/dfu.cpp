@@ -28,6 +28,8 @@ void printBuffer(uint8_t *V, int Size) {
   printf("\n");
 }
 
+string DFU::getSerialNumber() { return this->SerialNumber; }
+
 bool DFU::isExploited() {
   if (SerialNumber.find("PWND:[") != std::string::npos)
     return true;
@@ -73,9 +75,7 @@ void DFU::release_device() {
   device = nullptr;
 }
 
-void DFU::usb_reset() { 
-	int Result = libusb_reset_device(this->devh); 
-}
+void DFU::usb_reset() { int Result = libusb_reset_device(this->devh); }
 
 void DFU::stall() {
   std::vector<uint8_t> Buffer;
@@ -159,6 +159,13 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
   return true;
 }
 
+int DFU::ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
+                       uint16_t wIndex, uint8_t *data, size_t length,
+                       int timeout) {
+  return libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
+                                 wIndex, data, length, timeout);
+}
+
 bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
                                          uint8_t bRequest, uint16_t wValue,
                                          uint16_t wIndex, uint8_t *data,
@@ -169,10 +176,20 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
     libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
                             0, length, timeout);
   } else {
-    printBuffer(data, length);
     libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
                             data, (uint16_t)length, timeout);
   }
 
   return false;
+}
+
+void DFU::send_data(vector<uint8_t> data) {
+  int index = 0;
+  while (index < data.size()) {
+    int amount = min(data.size() - index, MAX_PACKET_SIZE);
+    auto r = libusb_control_transfer(this->devh, 0x21, 1, 0, 0, data.data(),
+                                     data.size(), 5000);
+    assert(r == 0);
+    index += amount;
+  }
 }

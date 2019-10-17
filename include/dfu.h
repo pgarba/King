@@ -48,6 +48,8 @@ public:
     assert(r == 0);
   };
 
+  string getSerialNumber();
+
   bool isExploited();
 
   bool acquire_device();
@@ -58,6 +60,8 @@ public:
   void no_leak();
   void usb_req_leak();
   void usb_req_stall();
+
+  void send_data(vector<uint8_t> data);
 
   struct libusb_transfer *
   libusb1_create_ctrl_transfer(std::vector<uint8_t> &request, int timeout);
@@ -70,6 +74,9 @@ public:
                                       uint16_t wValue, uint16_t wIndex,
                                       uint8_t *data, size_t length,
                                       int timeout);
+
+  int ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
+                    uint16_t wIndex, uint8_t *data, size_t length, int timeout);
 };
 
 #endif

@@ -19,7 +19,7 @@ using namespace std;
 #include "dfu.h"
 #include "usbexec.h"
 
-enum class ECOMMAND { EXIT = 0, CHECKM8, DEMOTE };
+enum class ECOMMAND { EXIT = 0, CHECKM8, DEMOTE, READ_U32 };
 
 const int PAYLOAD_OFFSET_ARMV7 = 384;
 const int PAYLOAD_SIZE_ARMV7 = 320;
@@ -410,11 +410,31 @@ void demoteDevice() {
   printf("[*] DemotionReg: %X\n", Value);
 }
 
+void read32(uint64_t address) {
+  DFU d;
+  d.acquire_device();
+  if (d.isExploited() == false) {
+    cout << "[!] Device has to be exploited first!\n";
+    return;
+  }
+
+  // Get serial number
+  auto SerialNumber = d.getSerialNumber();
+  d.release_device();
+
+  // Set demotion reg
+  USBEXEC U(SerialNumber);
+  uint32_t Value = U.read_memory_uint32(address);
+
+  printf("[*] [%lX] = %08X\n", address, Value);
+}
+
 ECOMMAND parseCommandLine(int argc, char *argv[]) {
   if (argc < 2) {
     cout << "Usage:\n";
-    cout << "checkm8      - execute checkm8 exploit\n";
-    cout << "enable_jtag  - enable the jtag in an exploited device\n";
+    cout << "checkm8          - execute checkm8 exploit\n";
+    cout << "enable_jtag      - enable the jtag in an exploited device\n";
+    cout << "read32 <address> - reads 32bit from the given address\n";
     cout << "\n";
 
     return ECOMMAND::EXIT;
@@ -425,6 +445,13 @@ ECOMMAND parseCommandLine(int argc, char *argv[]) {
     return ECOMMAND::CHECKM8;
   else if (Command == "enable_jtag")
     return ECOMMAND::DEMOTE;
+  else if (Command == "read32") {
+    if (argc < 3) {
+      cout << "[!] No address supplied!\n";
+      return ECOMMAND::EXIT;
+    }
+    return ECOMMAND::READ_U32;
+  }
 
   cout << "[!] Unknown command!\n";
 
@@ -442,6 +469,11 @@ int main(int argc, char *argv[]) {
     break;
   case ECOMMAND::DEMOTE:
     demoteDevice();
+    break;
+  case ECOMMAND::READ_U32: {
+      uint64_t address = strtoul(argv[2],0,0);
+      read32(address);
+    }
     break;
   default:
     // Do nothing

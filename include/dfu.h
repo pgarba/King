@@ -42,15 +42,21 @@ private:
   std::string SerialNumber;
 
 public:
+  static libusb_context *ctx;
+
   DFU() {
     devh = nullptr;
-    int r = libusb_init(nullptr);
-    assert(r == 0);
+    if (this->ctx == nullptr) {
+      int r = libusb_init(&ctx);
+      assert(r == 0);
+    }
   };
+
+  string getSerialNumber();
 
   bool isExploited();
 
-  bool acquire_device();
+  bool acquire_device(bool Silent = false);
   void release_device();
   void usb_reset();
 
@@ -58,6 +64,8 @@ public:
   void no_leak();
   void usb_req_leak();
   void usb_req_stall();
+
+  void send_data(vector<uint8_t> data);
 
   struct libusb_transfer *
   libusb1_create_ctrl_transfer(std::vector<uint8_t> &request, int timeout);
@@ -70,6 +78,19 @@ public:
                                       uint16_t wValue, uint16_t wIndex,
                                       uint8_t *data, size_t length,
                                       int timeout);
+
+  vector<uint8_t> ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest,
+                                uint16_t wValue, uint16_t wIndex, uint8_t *data,
+                                size_t length, int timeout);
+
+  void sync_transfer_wait_for_completion(struct libusb_transfer *transfer);
+
+  int my_libusb_control_transfer(libusb_device_handle *dev_handle,
+                                 uint8_t bmRequestType, uint8_t bRequest,
+                                 uint16_t wValue, uint16_t wIndex,
+                                 unsigned char *data, uint16_t wLength,
+                                 unsigned int timeout,
+                                 vector<uint8_t> &dataOut);
 };
 
 #endif

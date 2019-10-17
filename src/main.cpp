@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <vector>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <windows.h>
 #elif _POSIX_C_SOURCE >= 199309L
 #include <time.h> // for nanosleep

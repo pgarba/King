@@ -8,10 +8,10 @@
 
 using namespace std;
 
-const uint64_t EXEC_MAGIC = 'execexec';
-const uint64_t DONE_MAGIC =  0x646f6e65646f6e65; // "donedone";
-const uint64_t MEMC_MAGIC =  0x6D656D636D656D63; // 'memcmemc';
-const char MEMS_MAGIC[] = "memsmems";
+const uint64_t EXEC_MAGIC = 0x6578656365786563; // 'execexec';
+const uint64_t DONE_MAGIC = 0x646f6e65646f6e65; // "donedone";
+const uint64_t MEMC_MAGIC = 0x6D656D636D656D63; // 'memcmemc';
+const uint64_t MEMS_MAGIC = 0x6D656D736D656D73; // "memsmems";
 
 // Patch to make it work on ubuntu
 const int USB_READ_LIMIT = 0xFF0;

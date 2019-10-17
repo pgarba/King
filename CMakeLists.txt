@@ -2,9 +2,6 @@ cmake_minimum_required(VERSION 3.10)
 project(king)
 set(CMAKE_CXX_STANDARD 14)
 
-set(CMAKE_C_FLAGS "-g -O3")
-set(CMAKE_CXX_FLAGS "-g -O3")
-
 # libusb-1.0 on windows
 if(DEFINED WIN32)
 	SET(LIBUSB10_PATH "c:/checkm8/libusb_win/" CACHE PATH "Path to libusb1-0 directory")

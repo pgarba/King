@@ -2,11 +2,10 @@
 
 #include <algorithm>
 #include <assert.h>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <time.h>
-#include <cstring>
-#include <unistd.h>
 
 #ifndef min
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -34,96 +33,85 @@ static void printBuffer(uint8_t *V, int Size) {
   printf("\n");
 }
 
-static void my_sync_transfer_cb(struct libusb_transfer *transfer)
-{
-	int *completed = (int *) transfer->user_data;
-	*completed = 1;
+static void my_sync_transfer_cb(struct libusb_transfer *transfer) {
+  int *completed = (int *)transfer->user_data;
+  *completed = 1;
 }
 
-struct list_head {
-	struct list_head *prev, *next;
-};
+// Set static ctx
+libusb_context *DFU::ctx = nullptr;
 
-struct libusb_device {
-	/* lock protects refcnt, everything else is finalized at initialization
-	 * time */
-	uint32_t lock;
-	int refcnt;
+/*
+extern "C" void
+sync_transfer_wait_for_completion(struct libusb_transfer *transfer);
+*/
 
-	struct libusb_context *ctx;
+void DFU::sync_transfer_wait_for_completion(struct libusb_transfer *transfer) {
+  int r, *completed = (int *)transfer->user_data;
+  struct libusb_context *ctx = DFU::ctx;
 
-	uint8_t bus_number;
-	uint8_t port_number;
-	struct libusb_device* parent_dev;
-	uint8_t device_address;
-	uint8_t num_configurations;
-	enum libusb_speed speed;
+  while (!*completed) {
+    r = libusb_handle_events_completed(ctx, completed);
+    if (r < 0) {
+      if (r == LIBUSB_ERROR_INTERRUPTED)
+        continue;
+      libusb_cancel_transfer(transfer);
+      continue;
+    }
+    if (NULL == transfer->dev_handle) {
+      /* transfer completion after libusb_close() */
+      transfer->status = LIBUSB_TRANSFER_NO_DEVICE;
+      *completed = 1;
+    }
+  }
+}
 
-	struct list_head list;
-	unsigned long session_data;
+int DFU::my_libusb_control_transfer(libusb_device_handle *dev_handle,
+                                    uint8_t bmRequestType, uint8_t bRequest,
+                                    uint16_t wValue, uint16_t wIndex,
+                                    unsigned char *data, uint16_t wLength,
+                                    unsigned int timeout,
+                                    vector<uint8_t> &dataOut) {
+  struct libusb_transfer *transfer;
+  unsigned char *buffer;
+  int completed = 0;
+  int r;
 
-	struct libusb_device_descriptor device_descriptor;
-	int attached;
-};
+  transfer = libusb_alloc_transfer(0);
+  if (!transfer)
+    return LIBUSB_ERROR_NO_MEM;
 
+  buffer = (unsigned char *)malloc(LIBUSB_CONTROL_SETUP_SIZE + wLength);
+  if (!buffer) {
+    libusb_free_transfer(transfer);
+    return LIBUSB_ERROR_NO_MEM;
+  }
 
-struct libusb_device_handle {
-	/* lock protects claimed_interfaces */
-	//usbi_mutex_t lock;
-	uint32_t lock;
-	unsigned long claimed_interfaces;
+  libusb_fill_control_setup(buffer, bmRequestType, bRequest, wValue, wIndex,
+                            wLength);
+  if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
+    memcpy(buffer + LIBUSB_CONTROL_SETUP_SIZE, data, wLength);
 
-	struct list_head list;
-	struct libusb_device *dev;
-	int auto_detach_kernel_driver;
-};
+  libusb_fill_control_transfer(transfer, dev_handle, buffer,
+                               my_sync_transfer_cb, &completed, timeout);
+  transfer->flags = LIBUSB_TRANSFER_FREE_BUFFER;
+  r = libusb_submit_transfer(transfer);
+  if (r < 0) {
+    libusb_free_transfer(transfer);
+    return r;
+  }
 
-#define DEVICE_CTX(dev)		((dev)->ctx)
-#define HANDLE_CTX(handle)	(DEVICE_CTX((handle)->dev))
+  sync_transfer_wait_for_completion(transfer);
 
-extern "C" void sync_transfer_wait_for_completion(struct libusb_transfer *transfer);
+  // pgarba:
+  // Check if data is a null ptr. This leads to a crash on windows and others
+  if (data && (bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
+    memcpy(data, libusb_control_transfer_get_data(transfer),
+           transfer->actual_length);
 
-static int my_libusb_control_transfer(libusb_device_handle *dev_handle,
-	uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
-	unsigned char *data, uint16_t wLength, unsigned int timeout, vector<uint8_t> &dataOut)
-{
-	struct libusb_transfer *transfer;
-	unsigned char *buffer;
-	int completed = 0;
-	int r;
-
-	transfer = libusb_alloc_transfer(0);
-	if (!transfer)
-		return LIBUSB_ERROR_NO_MEM;
-
-	buffer = (unsigned char*) malloc(LIBUSB_CONTROL_SETUP_SIZE + wLength);
-	if (!buffer) {
-		libusb_free_transfer(transfer);
-		return LIBUSB_ERROR_NO_MEM;
-	}
-
-	libusb_fill_control_setup(buffer, bmRequestType, bRequest, wValue, wIndex,
-		wLength);
-	if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
-		memcpy(buffer + LIBUSB_CONTROL_SETUP_SIZE, data, wLength);
-
-	libusb_fill_control_transfer(transfer, dev_handle, buffer,
-		my_sync_transfer_cb, &completed, timeout);
-	transfer->flags = LIBUSB_TRANSFER_FREE_BUFFER;
-	r = libusb_submit_transfer(transfer);
-	if (r < 0) {
-		libusb_free_transfer(transfer);
-		return r;
-	}
-
-	sync_transfer_wait_for_completion(transfer);
-
-	if (data && (bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
-		memcpy(data, libusb_control_transfer_get_data(transfer),
-			transfer->actual_length);
-
+  // pgarba:
   // Fill data out buffer
-  // In the python scripts it will write to data ... 
+  // In the python scripts it will write to data ...
   // which of course should lead to a crash if data is not a valid ptr...
   // Wondering how it even could have work ?!?
   uint8_t *UD = libusb_control_transfer_get_data(transfer);
@@ -132,32 +120,32 @@ static int my_libusb_control_transfer(libusb_device_handle *dev_handle,
   uint8_t *End = Start + transfer->actual_length;
   dataOut.insert(dataOut.end(), Start, End);
 
-	switch (transfer->status) {
-	case LIBUSB_TRANSFER_COMPLETED:
-		r = transfer->actual_length;
-		break;
-	case LIBUSB_TRANSFER_TIMED_OUT:
-		r = LIBUSB_ERROR_TIMEOUT;
-		break;
-	case LIBUSB_TRANSFER_STALL:
-		r = LIBUSB_ERROR_PIPE;
-		break;
-	case LIBUSB_TRANSFER_NO_DEVICE:
-		r = LIBUSB_ERROR_NO_DEVICE;
-		break;
-	case LIBUSB_TRANSFER_OVERFLOW:
-		r = LIBUSB_ERROR_OVERFLOW;
-		break;
-	case LIBUSB_TRANSFER_ERROR:
-	case LIBUSB_TRANSFER_CANCELLED:
-		r = LIBUSB_ERROR_IO;
-		break;
-	default:
-		r = LIBUSB_ERROR_OTHER;
-	}
+  switch (transfer->status) {
+  case LIBUSB_TRANSFER_COMPLETED:
+    r = transfer->actual_length;
+    break;
+  case LIBUSB_TRANSFER_TIMED_OUT:
+    r = LIBUSB_ERROR_TIMEOUT;
+    break;
+  case LIBUSB_TRANSFER_STALL:
+    r = LIBUSB_ERROR_PIPE;
+    break;
+  case LIBUSB_TRANSFER_NO_DEVICE:
+    r = LIBUSB_ERROR_NO_DEVICE;
+    break;
+  case LIBUSB_TRANSFER_OVERFLOW:
+    r = LIBUSB_ERROR_OVERFLOW;
+    break;
+  case LIBUSB_TRANSFER_ERROR:
+  case LIBUSB_TRANSFER_CANCELLED:
+    r = LIBUSB_ERROR_IO;
+    break;
+  default:
+    r = LIBUSB_ERROR_OTHER;
+  }
 
-	libusb_free_transfer(transfer);
-	return r;
+  libusb_free_transfer(transfer);
+  return r;
 }
 
 string DFU::getSerialNumber() { return this->SerialNumber; }
@@ -298,12 +286,12 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
   return true;
 }
 
-vector<uint8_t> DFU::ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
-                       uint16_t wIndex, uint8_t *data, size_t length,
-                       int timeout) {
+vector<uint8_t> DFU::ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest,
+                                   uint16_t wValue, uint16_t wIndex,
+                                   uint8_t *data, size_t length, int timeout) {
   vector<uint8_t> Response;
-	my_libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
-                                 wIndex, data, length, timeout, Response);
+  my_libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
+                             wIndex, data, length, timeout, Response);
   return Response;
 }
 
@@ -329,8 +317,8 @@ void DFU::send_data(vector<uint8_t> data) {
   while (index < data.size()) {
     int amount = min(data.size() - index, MAX_PACKET_SIZE);
 
-    auto r = libusb_control_transfer(this->devh, 0x21, 1, 0, 0, &data.data()[index],
-                                     amount, 5000);
+    auto r = libusb_control_transfer(this->devh, 0x21, 1, 0, 0,
+                                     &data.data()[index], amount, 5000);
     assert(r == amount);
 
     index += amount;

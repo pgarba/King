@@ -413,8 +413,8 @@ void demoteDevice() {
   U.write_memory_uint32(U.getDemotionReg(), JTAG_ENABLED);
 
   uint32_t NewValue = U.read_memory_uint32(U.getDemotionReg());
-  printf("[*] New DemotionReg: %X\n", Value);
-  if (NewValue != Value) {
+  printf("[*] New DemotionReg: %X\n", NewValue);
+  if (NewValue == Value) {
     cout << "[!] Failed to enable the JTAG!\n";
   } else {
     cout << "[!] Succeeded to enable the JTAG!\n";

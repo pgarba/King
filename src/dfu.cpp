@@ -41,11 +41,6 @@ static void my_sync_transfer_cb(struct libusb_transfer *transfer) {
 // Set static ctx
 libusb_context *DFU::ctx = nullptr;
 
-/*
-extern "C" void
-sync_transfer_wait_for_completion(struct libusb_transfer *transfer);
-*/
-
 void DFU::sync_transfer_wait_for_completion(struct libusb_transfer *transfer) {
   int r, *completed = (int *)transfer->user_data;
   struct libusb_context *ctx = DFU::ctx;
@@ -190,7 +185,10 @@ bool DFU::acquire_device(bool Silent) {
   }
 
   this->SerialNumber = SerialNumber;
-  std::cout << "[*] Device Serial Number: " << this->SerialNumber << "\n";
+
+  if (!Silent) {
+    std::cout << "[*] Device Serial Number: " << this->SerialNumber << "\n";
+  }
 
   return true;
 }
@@ -300,14 +298,12 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
                                          uint16_t wIndex, uint8_t *data,
                                          size_t length, int timeout) {
 
-  if (data == nullptr) {
-    // Crash on Windows (Unknown why ...) but this is the only way it works!
-    libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
-                            0, length, timeout);
-  } else {
-    libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
-                            data, (uint16_t)length, timeout);
-  }
+  vector<uint8_t> response;
+  // Crash on Windows because data will be written back to nullptr data.
+  // should also crazy in the python version ...
+  // our own version will work
+  my_libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
+                          data, length, timeout, response);
 
   return false;
 }
@@ -317,8 +313,14 @@ void DFU::send_data(vector<uint8_t> data) {
   while (index < data.size()) {
     int amount = min(data.size() - index, MAX_PACKET_SIZE);
 
+    vector<uint8_t> response;
+    auto r = my_libusb_control_transfer(this->devh, 0x21, 1, 0, 0,
+                                     &data.data()[index], amount, 5000, response);
+
+    /*
     auto r = libusb_control_transfer(this->devh, 0x21, 1, 0, 0,
                                      &data.data()[index], amount, 5000);
+    */
     assert(r == amount);
 
     index += amount;

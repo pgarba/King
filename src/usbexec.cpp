@@ -153,3 +153,12 @@ uint32_t USBEXEC::read_memory_uint32(uint64_t address) {
 
   return *(uint32_t *)value.data();
 }
+
+uint64_t USBEXEC::read_memory_uint64(uint64_t address) {
+  auto value = read_memory(address, 8);
+  printBuffer(value);
+
+  assert(value.size() == 8);
+
+  return *(uint64_t *)value.data();
+}

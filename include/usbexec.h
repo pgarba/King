@@ -128,8 +128,14 @@ public:
   */
   vector<uint8_t> cmd_memset(uint8_t *address, uint8_t c, size_t length);
 
+  /*
+        Read memory helper
+  */
   uint32_t read_memory_uint32(uint64_t address);
+  uint64_t read_memory_uint64(uint64_t address); 
+
   uint32_t write_memory_uint32(uint64_t address, uint32_t value);
+
 
   uint64_t load_base();
 

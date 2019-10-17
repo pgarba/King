@@ -62,7 +62,7 @@ vector<uint8_t> USBEXEC::cmd_memcpy(uint64_t dest, uint64_t src,
   vector<uint8_t> cmd;
 
   // MEMC_MAGIC [0 - 8]
-  uint8_t *Start = (uint8_t *) &MEMC_MAGIC;
+  uint8_t *Start = (uint8_t *)&MEMC_MAGIC;
   uint8_t *End = Start + 8;
   cmd.insert(cmd.end(), Start, End);
 
@@ -105,10 +105,10 @@ vector<uint8_t> USBEXEC::command(vector<uint8_t> request_data,
   vector<uint8_t> response;
   if (response_length == 0) {
     response = d.ctrl_transfer(0xA1, 2, 0xFFFF, 0, nullptr, response_length + 1,
-                        CMD_TIMEOUT);
+                               CMD_TIMEOUT);
   } else {
     response = d.ctrl_transfer(0xA1, 2, 0xFFFF, 0, nullptr, response_length,
-                        CMD_TIMEOUT);
+                               CMD_TIMEOUT);
   }
 
   d.release_device();
@@ -133,16 +133,22 @@ vector<uint8_t> USBEXEC::read_memory(uint64_t address, int length) {
     printBuffer(result);
 
     if (result.size() < 8 && (*(uint64_t *)result.data()) != DONE_MAGIC) {
-    	cout << "[!] Wrong response retrieved. Aborting!\n";
+      cout << "[!] Wrong response retrieved. Aborting!\n";
     }
 
     // Append result
-    data.insert(data.end(), result.data() + cmd_data_offset(0), result.data() + result.size());
+    data.insert(data.end(), result.data() + cmd_data_offset(0),
+                result.data() + result.size());
   }
 
   printBuffer(data);
 
   return data;
+}
+
+void USBEXEC::write_memory(uint64_t address, vector<uint8_t> data) {
+  auto cmd_mcp = this->cmd_memcpy(address, cmd_data_address(3), data.size());
+  auto R = this->command(cmd_mcp, 0);
 }
 
 uint32_t USBEXEC::read_memory_uint32(uint64_t address) {
@@ -161,4 +167,11 @@ uint64_t USBEXEC::read_memory_uint64(uint64_t address) {
   assert(value.size() == 8);
 
   return *(uint64_t *)value.data();
+}
+
+void USBEXEC::write_memory_uint32(uint64_t address, uint32_t value) {
+  vector<uint8_t> Mem;
+  append(Mem, value);
+
+  this->write_memory(value, Mem);
 }

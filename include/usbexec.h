@@ -132,10 +132,12 @@ public:
         Read memory helper
   */
   uint32_t read_memory_uint32(uint64_t address);
-  uint64_t read_memory_uint64(uint64_t address); 
+  uint64_t read_memory_uint64(uint64_t address);
 
-  uint32_t write_memory_uint32(uint64_t address, uint32_t value);
-
+  /*
+        Write memory helper
+  */
+  void write_memory_uint32(uint64_t address, uint32_t value);
 
   uint64_t load_base();
 

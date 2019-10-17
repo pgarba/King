@@ -406,8 +406,18 @@ void demoteDevice() {
   // Set demotion reg
   USBEXEC U(SerialNumber);
   uint32_t Value = U.read_memory_uint32(U.getDemotionReg());
-
   printf("[*] DemotionReg: %X\n", Value);
+
+  uint32_t JTAG_ENABLED = Value & 0xFFFFFFFE;
+  U.write_memory_uint32(U.getDemotionReg(), JTAG_ENABLED);
+
+  uint32_t NewValue = U.read_memory_uint32(U.getDemotionReg());
+  printf("[*] DemotionReg: %X\n", Value);
+  if (NewValue != Value) {
+    cout << "[!] Failed to enable the JTAG!\n";
+  } else {
+    cout << "[!] Succeeded to enable the JTAG!\n";
+  }
 }
 
 void read32(uint64_t address) {
@@ -497,15 +507,13 @@ int main(int argc, char *argv[]) {
     demoteDevice();
     break;
   case ECOMMAND::READ_U32: {
-      uint64_t address = strtoul(argv[2],0,0);
-      read32(address);
-    }
-    break;
+    uint64_t address = strtoul(argv[2], 0, 0);
+    read32(address);
+  } break;
   case ECOMMAND::READ_U64: {
-      uint64_t address = strtoul(argv[2],0,0);
-      read64(address);
-    }
-  break;
+    uint64_t address = strtoul(argv[2], 0, 0);
+    read64(address);
+  } break;
   default:
     // Do nothing
     break;

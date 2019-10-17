@@ -1,6 +1,28 @@
 #include "usbexec.h"
 #include "dfu.h"
 
+static void printBuffer(std::vector<uint8_t> &V) {
+#ifndef DEBUG
+  return;
+#endif
+  printf("Buffer (%d): ", (int)V.size());
+  for (int i = 0; i < V.size(); i++) {
+    printf("%02X", V[i]);
+  }
+  printf("\n");
+}
+
+static void printBuffer(uint8_t *V, int Size) {
+#ifndef DEBUG
+  return;
+#endif
+  printf("Buffer (%d): ", (int)Size);
+  for (int i = 0; i < Size; i++) {
+    printf("%02X", V[i]);
+  }
+  printf("\n");
+}
+
 uint64_t USBEXEC::getDemotionReg() { return this->platform->demotion_reg; }
 
 uint64_t USBEXEC::load_base() {
@@ -100,6 +122,9 @@ vector<uint8_t> USBEXEC::read_memory(uint64_t address, int length) {
 
     auto cmd_mcp = this->cmd_memcpy(cmd_data_address(0), address + data.size(),
                                     cmd_data_offset(0) + part_length);
+
+    printf("cmd_mcp\n");
+    printBuffer(cmd_mcp);
 
     // Send to iPhone
     auto result = this->command(cmd_mcp, cmd_data_offset(0) + part_length);

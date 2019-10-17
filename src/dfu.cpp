@@ -10,7 +10,7 @@
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
-void printBuffer(std::vector<uint8_t> &V) {
+static void printBuffer(std::vector<uint8_t> &V) {
 #ifndef DEBUG
   return;
 #endif
@@ -21,7 +21,7 @@ void printBuffer(std::vector<uint8_t> &V) {
   printf("\n");
 }
 
-void printBuffer(uint8_t *V, int Size) {
+static void printBuffer(uint8_t *V, int Size) {
 #ifndef DEBUG
   return;
 #endif

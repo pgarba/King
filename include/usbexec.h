@@ -104,7 +104,7 @@ public:
 
     // Set fixed t8010 config for now
     this->config = &this->configs[0];
-    this->platform = &this->platform[0];
+    this->platform = &this->all_platforms[0];
   }
 
   void write_memory(uint64_t address, vector<uint8_t> data);

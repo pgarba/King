@@ -393,6 +393,7 @@ void runCheckm8() {
 
 void demoteDevice() {
   DFU d;
+  d.acquire_device();
   if (d.isExploited() == false) {
     cout << "[!] Device has to be exploited first!\n";
     return;
@@ -412,8 +413,8 @@ void demoteDevice() {
 ECOMMAND parseCommandLine(int argc, char *argv[]) {
   if (argc < 2) {
     cout << "Usage:\n";
-    cout << "checkm8: - execute checkm8 exploit\n";
-    cout << "enable_jtag: - enable the jtag in an exploited device\n";
+    cout << "checkm8      - execute checkm8 exploit\n";
+    cout << "enable_jtag  - enable the jtag in an exploited device\n";
     cout << "\n";
 
     return ECOMMAND::EXIT;
@@ -424,6 +425,8 @@ ECOMMAND parseCommandLine(int argc, char *argv[]) {
     return ECOMMAND::CHECKM8;
   else if (Command == "enable_jtag")
     return ECOMMAND::DEMOTE;
+
+  cout << "[!] Unknown command!\n";
 
   return ECOMMAND::EXIT;
 }

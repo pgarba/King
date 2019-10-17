@@ -6,6 +6,10 @@
 #include <string>
 #include <time.h>
 
+#ifndef min
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
 void printBuffer(std::vector<uint8_t> &V) {
 #ifndef DEBUG
   return;

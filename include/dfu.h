@@ -52,7 +52,7 @@ public:
 
   bool isExploited();
 
-  bool acquire_device();
+  bool acquire_device(bool Silent=false);
   void release_device();
   void usb_reset();
 
@@ -75,7 +75,7 @@ public:
                                       uint8_t *data, size_t length,
                                       int timeout);
 
-  int ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
+  vector<uint8_t> ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
                     uint16_t wIndex, uint8_t *data, size_t length, int timeout);
 };
 

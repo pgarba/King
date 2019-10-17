@@ -1,5 +1,6 @@
 #include "usbexec.h"
 #include "dfu.h"
+#include <iostream>
 
 static void printBuffer(std::vector<uint8_t> &V) {
 #ifndef DEBUG
@@ -26,7 +27,7 @@ static void printBuffer(uint8_t *V, int Size) {
 uint64_t USBEXEC::getDemotionReg() { return this->platform->demotion_reg; }
 
 uint64_t USBEXEC::load_base() {
-  if (serial_number.find("SRGT") != string::npos) {
+  if (serial_number.find("SRTG") != string::npos) {
     return this->platform->dfu_image_base;
   } else {
     return this->platform->dfu_load_base;
@@ -49,7 +50,7 @@ uint64_t USBEXEC::cmd_arg_type() {
 }
 
 uint64_t USBEXEC::cmd_data_offset(int index) {
-  return 16 * (uint64_t)index * this->cmd_arg_size();
+  return 16 + (uint64_t)index * this->cmd_arg_size();
 };
 
 uint64_t USBEXEC::cmd_data_address(int index) {
@@ -61,7 +62,9 @@ vector<uint8_t> USBEXEC::cmd_memcpy(uint64_t dest, uint64_t src,
   vector<uint8_t> cmd;
 
   // MEMC_MAGIC [0 - 8]
-  append(cmd, MEMC_MAGIC);
+  uint8_t *Start = (uint8_t *) &MEMC_MAGIC;
+  uint8_t *End = Start + 8;
+  cmd.insert(cmd.end(), Start, End);
 
   // SPACE [8 - 16]
   cmd.insert(cmd.end(), 8, 0);
@@ -87,7 +90,7 @@ vector<uint8_t> USBEXEC::command(vector<uint8_t> request_data,
   assert(0 <= response_length <= USB_READ_LIMIT);
 
   DFU d;
-  d.acquire_device();
+  d.acquire_device(true);
 
   vector<uint8_t> Zeros;
   Zeros.insert(Zeros.end(), 16, 0);
@@ -101,10 +104,10 @@ vector<uint8_t> USBEXEC::command(vector<uint8_t> request_data,
   int r = 0;
   vector<uint8_t> response;
   if (response_length == 0) {
-    r = d.ctrl_transfer(0xA1, 2, 0xFFFF, 0, nullptr, response_length + 1,
+    response = d.ctrl_transfer(0xA1, 2, 0xFFFF, 0, nullptr, response_length + 1,
                         CMD_TIMEOUT);
   } else {
-    r = d.ctrl_transfer(0xA1, 2, 0xFFFF, 0, nullptr, response_length,
+    response = d.ctrl_transfer(0xA1, 2, 0xFFFF, 0, nullptr, response_length,
                         CMD_TIMEOUT);
   }
 
@@ -121,22 +124,31 @@ vector<uint8_t> USBEXEC::read_memory(uint64_t address, int length) {
                                (USB_READ_LIMIT - this->cmd_data_address(0)));
 
     auto cmd_mcp = this->cmd_memcpy(cmd_data_address(0), address + data.size(),
-                                    cmd_data_offset(0) + part_length);
-
-    printf("cmd_mcp\n");
-    printBuffer(cmd_mcp);
+                                    part_length);
 
     // Send to iPhone
     auto result = this->command(cmd_mcp, cmd_data_offset(0) + part_length);
 
+    // Verify result
+    printBuffer(result);
+
+    if (result.size() < 8 && (*(uint64_t *)result.data()) != DONE_MAGIC) {
+    	cout << "[!] Wrong response retrieved. Aborting!\n";
+    }
+
     // Append result
-    append(data, result);
+    data.insert(data.end(), result.data() + cmd_data_offset(0), result.data() + result.size());
   }
+
+  printBuffer(data);
+
   return data;
 }
 
 uint32_t USBEXEC::read_memory_uint32(uint64_t address) {
   auto value = read_memory(address, 4);
+  printBuffer(value);
+
   assert(value.size() == 4);
 
   return *(uint32_t *)value.data();

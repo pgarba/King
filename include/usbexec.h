@@ -8,9 +8,9 @@
 
 using namespace std;
 
-const char EXEC_MAGIC[] = "execexec";
-const char DONE_MAGIC[] = "donedone";
-const char MEMC_MAGIC[] = "memcmemc";
+const uint64_t EXEC_MAGIC = 'execexec';
+const uint64_t DONE_MAGIC =  0x646f6e65646f6e65; // "donedone";
+const uint64_t MEMC_MAGIC =  0x6D656D636D656D63; // 'memcmemc';
 const char MEMS_MAGIC[] = "memsmems";
 
 // Patch to make it work on ubuntu
@@ -45,10 +45,10 @@ public:
     this->demotion_reg = demotion_reg;
 
     if (cpid == 0x8010) {
-      dfu_image_base = 0x1800B0000;
-      dfu_load_base = 0x800000000;
-      recovery_image_base = 0x1800B0000;
-      recovery_load_base = 0x800000000;
+      this->dfu_image_base = 0x1800B0000;
+      this->dfu_load_base = 0x800000000;
+      this->recovery_image_base = 0x1800B0000;
+      this->recovery_load_base = 0x800000000;
     } else {
       assert(0 && "Not implemented");
     }

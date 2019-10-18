@@ -303,7 +303,7 @@ vector<uint8_t> getT8010Shellcode() {
 
 #pragma pack(1)
 typedef struct alignas(1) {
-  uint8_t temp0[0x580] = {0};
+  // uint8_t temp0[0x580] = {0}; Disable LH
   uint8_t temp1[32] = {0};
   uint64_t t8010_nop_gadget0 = 0x10000CC6C;
   uint64_t Offset = 0x1800B0800;

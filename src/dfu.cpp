@@ -7,10 +7,6 @@
 #include <string>
 #include <time.h>
 
-#ifndef min
-#define min(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-
 static void printBuffer(std::vector<uint8_t> &V) {
 #ifndef DEBUG
   return;
@@ -302,8 +298,8 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
   // Crash on Windows because data will be written back to nullptr data.
   // should also crazy in the python version ...
   // our own version will work
-  my_libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
-                          data, length, timeout, response);
+  my_libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
+                             wIndex, data, length, timeout, response);
 
   return false;
 }
@@ -314,8 +310,8 @@ void DFU::send_data(vector<uint8_t> data) {
     int amount = min(data.size() - index, MAX_PACKET_SIZE);
 
     vector<uint8_t> response;
-    auto r = my_libusb_control_transfer(this->devh, 0x21, 1, 0, 0,
-                                     &data.data()[index], amount, 5000, response);
+    auto r = my_libusb_control_transfer(
+        this->devh, 0x21, 1, 0, 0, &data.data()[index], amount, 5000, response);
     assert(r == amount);
 
     index += amount;

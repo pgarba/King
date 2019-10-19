@@ -6,6 +6,10 @@
 #include <string>
 #include <vector>
 
+#ifndef min
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
 using namespace std;
 
 // Some template helpers

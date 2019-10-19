@@ -4,7 +4,7 @@
 
 static void printBuffer(std::vector<uint8_t> &V) {
 #ifndef DEBUG
-	return;
+  return;
 #endif
   printf("Buffer (%d): ", (int)V.size());
   for (int i = 0; i < V.size(); i++) {
@@ -15,7 +15,7 @@ static void printBuffer(std::vector<uint8_t> &V) {
 
 static void printBuffer(uint8_t *V, int Size) {
 #ifndef DEBUG
-	return;
+  return;
 #endif
   printf("Buffer (%d): ", (int)Size);
   for (int i = 0; i < Size; i++) {

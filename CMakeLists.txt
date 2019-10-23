@@ -13,6 +13,7 @@ src/usbexec.cpp
 src/ASN1DERElement.cpp
 src/lzssdec.c
 src/img4tool.cpp
+src/aes.c
 )
 
 add_executable(king ${SOURCE_FILES})

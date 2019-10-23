@@ -7,29 +7,34 @@
 #include <string>
 #include <time.h>
 
-static void printBuffer(std::vector<uint8_t> &V) {
+static void printBuffer(std::vector<uint8_t> &V)
+{
 #ifndef DEBUG
   return;
 #endif
   printf("Buffer (%d): ", (int)V.size());
-  for (int i = 0; i < V.size(); i++) {
+  for (int i = 0; i < V.size(); i++)
+  {
     printf("%02X", V[i]);
   }
   printf("\n");
 }
 
-static void printBuffer(uint8_t *V, int Size) {
+static void printBuffer(uint8_t *V, int Size)
+{
 #ifndef DEBUG
   return;
 #endif
   printf("Buffer (%d): ", (int)Size);
-  for (int i = 0; i < Size; i++) {
+  for (int i = 0; i < Size; i++)
+  {
     printf("%02X", V[i]);
   }
   printf("\n");
 }
 
-static void my_sync_transfer_cb(struct libusb_transfer *transfer) {
+static void my_sync_transfer_cb(struct libusb_transfer *transfer)
+{
   int *completed = (int *)transfer->user_data;
   *completed = 1;
 }
@@ -37,19 +42,23 @@ static void my_sync_transfer_cb(struct libusb_transfer *transfer) {
 // Set static ctx
 libusb_context *DFU::ctx = nullptr;
 
-void DFU::sync_transfer_wait_for_completion(struct libusb_transfer *transfer) {
+void DFU::sync_transfer_wait_for_completion(struct libusb_transfer *transfer)
+{
   int r, *completed = (int *)transfer->user_data;
   struct libusb_context *ctx = DFU::ctx;
 
-  while (!*completed) {
+  while (!*completed)
+  {
     r = libusb_handle_events_completed(ctx, completed);
-    if (r < 0) {
+    if (r < 0)
+    {
       if (r == LIBUSB_ERROR_INTERRUPTED)
         continue;
       libusb_cancel_transfer(transfer);
       continue;
     }
-    if (NULL == transfer->dev_handle) {
+    if (NULL == transfer->dev_handle)
+    {
       /* transfer completion after libusb_close() */
       transfer->status = LIBUSB_TRANSFER_NO_DEVICE;
       *completed = 1;
@@ -62,7 +71,8 @@ int DFU::my_libusb_control_transfer(libusb_device_handle *dev_handle,
                                     uint16_t wValue, uint16_t wIndex,
                                     unsigned char *data, uint16_t wLength,
                                     unsigned int timeout,
-                                    vector<uint8_t> &dataOut) {
+                                    vector<uint8_t> &dataOut)
+{
   struct libusb_transfer *transfer;
   unsigned char *buffer;
   int completed = 0;
@@ -73,7 +83,8 @@ int DFU::my_libusb_control_transfer(libusb_device_handle *dev_handle,
     return LIBUSB_ERROR_NO_MEM;
 
   buffer = (unsigned char *)malloc(LIBUSB_CONTROL_SETUP_SIZE + wLength);
-  if (!buffer) {
+  if (!buffer)
+  {
     libusb_free_transfer(transfer);
     return LIBUSB_ERROR_NO_MEM;
   }
@@ -87,7 +98,8 @@ int DFU::my_libusb_control_transfer(libusb_device_handle *dev_handle,
                                my_sync_transfer_cb, &completed, timeout);
   transfer->flags = LIBUSB_TRANSFER_FREE_BUFFER;
   r = libusb_submit_transfer(transfer);
-  if (r < 0) {
+  if (r < 0)
+  {
     libusb_free_transfer(transfer);
     return r;
   }
@@ -111,7 +123,8 @@ int DFU::my_libusb_control_transfer(libusb_device_handle *dev_handle,
   uint8_t *End = Start + transfer->actual_length;
   dataOut.insert(dataOut.end(), Start, End);
 
-  switch (transfer->status) {
+  switch (transfer->status)
+  {
   case LIBUSB_TRANSFER_COMPLETED:
     r = transfer->actual_length;
     break;
@@ -141,16 +154,19 @@ int DFU::my_libusb_control_transfer(libusb_device_handle *dev_handle,
 
 string DFU::getSerialNumber() { return this->SerialNumber; }
 
-bool DFU::isExploited() {
+bool DFU::isExploited()
+{
   if (SerialNumber.find("PWND:[") != std::string::npos)
     return true;
 
   return false;
 }
 
-bool DFU::acquire_device(bool Silent) {
+bool DFU::acquire_device(bool Silent)
+{
   devh = libusb_open_device_with_vid_pid(NULL, idVendor, idProduct);
-  if (!devh) {
+  if (!devh)
+  {
     printf("[!] Could not find device in DFU mode!\n");
     exit(1);
   }
@@ -159,13 +175,15 @@ bool DFU::acquire_device(bool Silent) {
 
   // Claim device
   int r = libusb_claim_interface(devh, 0);
-  if (r < 0) {
+  if (r < 0)
+  {
     printf("[!] libusb_claim_interface error %d\n", r);
     exit(1);
   }
 
   r = libusb_get_device_descriptor(device, &desc);
-  if (r < 0) {
+  if (r < 0)
+  {
     printf("[!] libusb_get_device_descriptor error %d\n", r);
     exit(1);
   }
@@ -174,7 +192,8 @@ bool DFU::acquire_device(bool Silent) {
   r = libusb_get_string_descriptor_ascii(devh, desc.iSerialNumber,
                                          (unsigned char *)SerialNumber,
                                          sizeof(SerialNumber));
-  if (r < 0) {
+  if (r < 0)
+  {
     printf("[!] libusb_get_string_descriptor_ascii error %d\n", r);
     return true;
     exit(1);
@@ -182,14 +201,16 @@ bool DFU::acquire_device(bool Silent) {
 
   this->SerialNumber = SerialNumber;
 
-  if (!Silent) {
+  if (!Silent)
+  {
     std::cout << "[*] Device Serial Number: " << this->SerialNumber << "\n";
   }
 
   return true;
 }
 
-void DFU::release_device() {
+void DFU::release_device()
+{
   libusb_release_interface(devh, 0);
   libusb_close(devh);
   devh = nullptr;
@@ -198,27 +219,32 @@ void DFU::release_device() {
 
 void DFU::usb_reset() { int Result = libusb_reset_device(this->devh); }
 
-void DFU::stall() {
+void DFU::stall()
+{
   std::vector<uint8_t> Buffer;
   Buffer.insert(Buffer.end(), 0xC0, 'A');
 
   libusb1_async_ctrl_transfer(0x80, 6, 0x304, 0x40A, Buffer, 0.00001);
 }
 
-void DFU::no_leak() {
+void DFU::no_leak()
+{
   libusb1_no_error_ctrl_transfer(0x80, 6, 0x304, 0x40A, nullptr, 0xC1, 1);
 }
 
-void DFU::usb_req_stall() {
+void DFU::usb_req_stall()
+{
   libusb1_no_error_ctrl_transfer(0x2, 3, 0x0, 0x80, nullptr, 0x0, 10);
 }
 
-void DFU::usb_req_leak() {
+void DFU::usb_req_leak()
+{
   libusb1_no_error_ctrl_transfer(0x80, 6, 0x304, 0x40A, nullptr, 0x40, 1);
 }
 
 struct libusb_transfer *
-DFU::libusb1_create_ctrl_transfer(std::vector<uint8_t> &request, int timeout) {
+DFU::libusb1_create_ctrl_transfer(std::vector<uint8_t> &request, int timeout)
+{
   auto *ptr = libusb_alloc_transfer(0);
   ptr->dev_handle = this->devh;
   ptr->endpoint = 0; // EP0
@@ -236,9 +262,11 @@ DFU::libusb1_create_ctrl_transfer(std::vector<uint8_t> &request, int timeout) {
 bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
                                       int wValue, int wIndex,
                                       std::vector<uint8_t> &data,
-                                      double timeout) {
+                                      double timeout)
+{
   int request_timeout = 0;
-  if (timeout >= 1.) {
+  if (timeout >= 1.)
+  {
     request_timeout = (int)timeout;
   }
 
@@ -259,7 +287,8 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
 
   // Submit transfer
   int r = libusb_submit_transfer(rawRequest);
-  if (r) {
+  if (r)
+  {
     printf("[!] libusb_submit_transfer failed! %d %s\n", r,
            libusb_strerror((libusb_error)r));
     exit(1);
@@ -268,12 +297,14 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
   // Wait for timeout
   int i = 0;
   int t = (timeout / 1000.0);
-  while ((time(nullptr) - start) < t) {
+  while ((time(nullptr) - start) < t)
+  {
     i++;
   }
 
   r = libusb_cancel_transfer(rawRequest);
-  if (r) {
+  if (r)
+  {
     printf("[!] libusb_cancel_transfer failed! %d %s\n", r,
            libusb_strerror((libusb_error)r));
     exit(1);
@@ -284,7 +315,8 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
 
 vector<uint8_t> DFU::ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest,
                                    uint16_t wValue, uint16_t wIndex,
-                                   uint8_t *data, size_t length, int timeout) {
+                                   uint8_t *data, size_t length, int timeout)
+{
   vector<uint8_t> Response;
   my_libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
                              wIndex, data, length, timeout, Response);
@@ -294,7 +326,8 @@ vector<uint8_t> DFU::ctrl_transfer(uint8_t bmRequestType, uint8_t bRequest,
 bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
                                          uint8_t bRequest, uint16_t wValue,
                                          uint16_t wIndex, uint8_t *data,
-                                         size_t length, int timeout) {
+                                         size_t length, int timeout)
+{
 
   vector<uint8_t> response;
   // Crash on Windows because data will be written back to nullptr data.
@@ -306,15 +339,22 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
   return false;
 }
 
-void DFU::send_data(vector<uint8_t> data) {
+void DFU::send_data(vector<uint8_t> data)
+{
   int index = 0;
-  while (index < data.size()) {
+  while (index < data.size())
+  {
     int amount = lmin(data.size() - index, MAX_PACKET_SIZE);
 
     vector<uint8_t> response;
     auto r = my_libusb_control_transfer(
         this->devh, 0x21, 1, 0, 0, &data.data()[index], amount, 5000, response);
-    assert(r == amount);
+
+    if (r != amount)
+    {
+      printf("r != amount (%d %d)", r, amount);
+      return;
+    }
 
     index += amount;
   }

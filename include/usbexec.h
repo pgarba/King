@@ -139,9 +139,26 @@ public:
   */
   void write_memory_uint32(uint64_t address, uint32_t value);
 
+  /*
+        Load the image base
+  */
   uint64_t load_base();
 
+  /*
+        Get the demotion reg offset
+  */
   uint64_t getDemotionReg();
+
+  /*
+        Run the aes engine
+  */
+  void aes(vector<uint8_t> data, int action, int key, vector<uint8_t> &Out);
+
+  /*
+        Execute code
+  */
+  void execute(size_t response_length, vector<vector<uint8_t>> args,
+               vector<uint8_t> &Out);
 
 private:
   string serial_number;

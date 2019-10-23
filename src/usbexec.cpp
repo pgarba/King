@@ -87,7 +87,7 @@ vector<uint8_t> USBEXEC::cmd_memcpy(uint64_t dest, uint64_t src,
 
 vector<uint8_t> USBEXEC::command(vector<uint8_t> request_data,
                                  size_t response_length) {
-  assert(0 <= response_length <= USB_READ_LIMIT);
+  // assert(0 <= response_length <= USB_READ_LIMIT);
 
   DFU d;
   d.acquire_device(true);
@@ -101,7 +101,6 @@ vector<uint8_t> USBEXEC::command(vector<uint8_t> request_data,
   d.send_data(request_data);
 
   // HACK ?!
-  int r = 0;
   vector<uint8_t> response;
   if (response_length == 0) {
     response = d.ctrl_transfer(0xA1, 2, 0xFFFF, 0, nullptr, response_length + 1,
@@ -120,8 +119,8 @@ vector<uint8_t> USBEXEC::read_memory(uint64_t address, int length) {
   vector<uint8_t> data;
 
   while (data.size() < length) {
-    uint64_t part_length = min((length - data.size()),
-                               (USB_READ_LIMIT - this->cmd_data_address(0)));
+    uint64_t part_length = lmin((length - data.size()),
+                                (USB_READ_LIMIT - this->cmd_data_address(0)));
 
     auto cmd_mcp = this->cmd_memcpy(cmd_data_address(0), address + data.size(),
                                     part_length);
@@ -177,4 +176,89 @@ void USBEXEC::write_memory_uint32(uint64_t address, uint32_t value) {
   append(Mem, value);
 
   this->write_memory(address, Mem);
+}
+
+void USBEXEC::aes(vector<uint8_t> data, int action, int key,
+                  vector<uint8_t> &Out) {
+  if (data.size() % AES_BLOCK_SIZE) {
+    printf("[!] Data size is not aligned!\n");
+    exit(0);
+  }
+
+  // call execute
+  vector<vector<uint8_t>> args;
+
+  // self.config.aes_crypto_cmd
+  vector<uint8_t> aes_crypto_cmd;
+  append(aes_crypto_cmd, this->config->aes_crypto_cmd);
+  args.push_back(aes_crypto_cmd);
+
+  // action
+  vector<uint8_t> actionV;
+  append(actionV, (uint64_t)action);
+  args.push_back(actionV);
+
+  // self.cmd_data_address(7)
+  vector<uint8_t> cmd_data_address7;
+  append(cmd_data_address7, this->cmd_data_address(7));
+  args.push_back(cmd_data_address7);
+
+  // self.cmd_data_address(0)
+  vector<uint8_t> cmd_data_address0;
+  append(cmd_data_address0, this->cmd_data_address(0));
+  args.push_back(cmd_data_address0);
+
+  // len(data)
+  vector<uint8_t> lendata;
+  append(lendata, (uint64_t)data.size());
+  args.push_back(lendata);
+
+  // len(data)
+  vector<uint8_t> keyV;
+  append(keyV, (uint64_t)key);
+  args.push_back(keyV);
+
+  // 0
+  vector<uint8_t> Zero;
+  append(Zero, (uint64_t)0);
+  args.push_back(Zero);
+  args.push_back(Zero);
+
+  // data
+  args.push_back(data);
+
+  // execute command
+  execute(data.size(), args, Out);
+}
+
+void USBEXEC::execute(size_t response_length, vector<vector<uint8_t>> args,
+                      vector<uint8_t> &Out) {
+  // Build up cmd buffer
+  vector<uint8_t> cmd;
+
+  // MEMC_MAGIC [0 - 8]
+  uint8_t *Start = (uint8_t *)&EXEC_MAGIC;
+  uint8_t *End = Start + 8;
+  cmd.insert(cmd.end(), Start, End);
+
+  for (auto &arg : args) {
+    printBuffer(arg);
+    appendV(cmd, arg);
+  }
+
+  printBuffer(cmd);
+
+  auto result = command(cmd, cmd_data_offset(0) + response_length);
+
+  // Verify result
+  printBuffer(result);
+
+  if (result.size() < 8 && (*(uint64_t *)result.data()) != DONE_MAGIC) {
+    cout << "[!] Wrong response retrieved. Aborting!\n";
+  }
+
+  // Append result
+  Out.clear();
+  Out.insert(Out.end(), result.data() + cmd_data_offset(0),
+             result.data() + result.size());
 }

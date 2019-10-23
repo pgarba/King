@@ -1,32 +1,40 @@
 #ifndef DFU_H
 #define DFU_H
 
+//#define DEBUG
+
 #include <assert.h>
 #include <libusb-1.0/libusb.h>
 #include <string>
 #include <vector>
 
-#ifndef min
-#define min(a, b) (((a) < (b)) ? (a) : (b))
+#ifndef lmin
+#define lmin(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
 using namespace std;
 
 // Some template helpers
-template <typename T> void append(vector<T> &V, uint8_t *Data, size_t Size) {
+template <typename T>
+void append(vector<T> &V, uint8_t *Data, size_t Size)
+{
   uint8_t *Start = Data;
   uint8_t *End = Start + Size;
   V.insert(V.end(), Start, End);
 };
 
-template <typename T, typename C> void append(vector<T> &V, C Value) {
+template <typename T, typename C>
+void append(vector<T> &V, C Value)
+{
   int Size = sizeof(C);
   uint8_t *Start = (uint8_t *)&Value;
   uint8_t *End = Start + Size;
   V.insert(V.end(), Start, End);
 };
 
-template <typename T, typename C> void appendV(vector<T> &V, vector<C> Value) {
+template <typename T, typename C>
+void appendV(vector<T> &V, vector<C> Value)
+{
   size_t Size = Value.size() * sizeof(C);
   uint8_t *Start = (uint8_t *)Value.data();
   uint8_t *End = Start + Size;
@@ -35,7 +43,8 @@ template <typename T, typename C> void appendV(vector<T> &V, vector<C> Value) {
 
 const int MAX_PACKET_SIZE = 0x800;
 
-class DFU {
+class DFU
+{
 private:
   const int idVendor = 0x5AC;
   const int idProduct = 0x1227;
@@ -48,9 +57,11 @@ private:
 public:
   static libusb_context *ctx;
 
-  DFU() {
+  DFU()
+  {
     devh = nullptr;
-    if (this->ctx == nullptr) {
+    if (this->ctx == nullptr)
+    {
       int r = libusb_init(&ctx);
       assert(r == 0);
     }

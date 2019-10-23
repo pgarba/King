@@ -54,6 +54,32 @@ sudo ./king read32 0x100000280
 [!] Succeeded to enable the JTAG!
 ```
 
+# Decrypt and unpack IM4P firmware image
+```
+sudo ./king decryptIMG iBoot.d10.RELEASE.im4p   
+decryptIMG4
+IM4P: ---------
+type: ibot
+desc: iBoot-5540.0.129
+size: 0x00072340
+
+KBAG
+num: 1
+3c8b957e2bca7ce6e56b41f86490f535
+9fde3e44de15dac204f895378d0e7eb03ecc2b67bb1958bb2c70508ea63875f5
+num: 2
+af60c224bd43c632a17495816dca1ae6
+bada1c3314217e7dd6b903d4c3caf3a7aa0f214ec40f13a1085d04bb2d05dc25
+
+[*] Device Serial Number: CPID:8010 ... SRTG:[iBoot-2696.0.0.1.33] PWND:[checkm8][*] Decrypted Keybag: 
+DF97....15CE
+[*] Decrypted Key: 
+369......5CE
+[*] Decrypted IV: 
+DF........E7
+[!] File succesfully decrypted and written to: iBoot.d10.RELEASE.im4p_decrypted
+```
+
 # Limitations
 
 I only ported the t8010 exploit and so far it fails on Windows (WIP!)

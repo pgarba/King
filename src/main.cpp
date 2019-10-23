@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <vector>
 
+#include "img4tool.hpp"
+
 #ifdef _WIN32
 #include <windows.h>
 #elif _POSIX_C_SOURCE >= 199309L
@@ -15,11 +17,23 @@
 #endif
 
 using namespace std;
+using namespace tihmstar::img4tool;
 
+#define AES256 1
+#include "aes.hpp"
 #include "dfu.h"
 #include "usbexec.h"
 
-enum class ECOMMAND { EXIT = 0, CHECKM8, DEMOTE, READ_U32, READ_U64 };
+typedef vector<uint8_t> V8;
+
+enum class ECOMMAND {
+  EXIT = 0,
+  CHECKM8,
+  DEMOTE,
+  READ_U32,
+  READ_U64,
+  DECRYPT_IMG4
+};
 
 const int PAYLOAD_OFFSET_ARMV7 = 384;
 const int PAYLOAD_SIZE_ARMV7 = 320;
@@ -50,6 +64,18 @@ typedef struct _Callback {
       : FunctionAddress(FunctionAddress), CallbackAddress(CallbackAddress) {}
 
 } Callback;
+
+std::vector<uint8_t> HexToBytes(const std::string &hex) {
+  std::vector<uint8_t> bytes;
+
+  for (unsigned int i = 0; i < hex.length(); i += 2) {
+    std::string byteString = hex.substr(i, 2);
+    char byte = (char)strtol(byteString.c_str(), NULL, 16);
+    bytes.push_back(byte);
+  }
+
+  return bytes;
+}
 
 void sleep_ms(int milliseconds) // cross-platform sleep function
 {
@@ -459,13 +485,143 @@ void read64(uint64_t address) {
   printf("[*] [%lX] = %016lX\n", address, Value);
 }
 
+void decryptIMG4(std::string FileName, std::string DecryptedKeyBag) {
+  cout << "decryptIMG4\n";
+  // Open file
+  ifstream f(FileName, ios::binary | ios::in);
+  if (f.is_open() == false) {
+    cout << "[!] Could not open binary file: '" << FileName << "'\n";
+    exit(0);
+  }
+  f.unsetf(std::ios::skipws);
+  std::streampos fileSize;
+  f.seekg(0, std::ios::end);
+  fileSize = f.tellg();
+  f.seekg(0, std::ios::beg);
+  std::vector<uint8_t> workingBuffer;
+  workingBuffer.reserve(fileSize);
+  workingBuffer.insert(workingBuffer.begin(), std::istream_iterator<uint8_t>(f),
+                       std::istream_iterator<uint8_t>());
+  f.close();
+
+  // Print info and get Keybags
+  vector<string> KeyBags;
+  auto seqName = getNameForSequence(workingBuffer.data(), workingBuffer.size());
+  if (seqName == "IM4P") {
+    printIM4P(workingBuffer.data(), workingBuffer.size(), KeyBags);
+  } else {
+    printf("File not recognised");
+    exit(0);
+  }
+
+  // Combine keybag
+  if (KeyBags.size() < 2) {
+    cout << "[!] Could not retrieve keybag!\n";
+    exit(0);
+  }
+
+  std::vector<uint8_t> KeyBag1;
+  append(KeyBag1, (uint8_t *)KeyBags[0].data(), KeyBags[0].size());
+  append(KeyBag1, (uint8_t *)KeyBags[1].data(), KeyBags[1].size());
+
+  // Decrypt keybag
+  std::vector<uint8_t> DecryptedKeyBag1;
+  DecryptedKeyBag1 = HexToBytes(DecryptedKeyBag);
+  if (DecryptedKeyBag.size() == 0) {
+    DFU d;
+    d.acquire_device();
+    if (d.isExploited() == false) {
+      cout << "[!] Device has to be exploited first!\n";
+      return;
+    }
+
+    // Get serial number
+    auto SerialNumber = d.getSerialNumber();
+    d.release_device();
+
+    // Decrypt GID
+    USBEXEC U(SerialNumber);
+    U.aes(KeyBag1, AES_DECRYPT, AES_GID_KEY, DecryptedKeyBag1);
+  }
+
+  cout << "[*] Decrypted Keybag: \n";
+  for (int i = 0; i < DecryptedKeyBag1.size(); i++) {
+    printf("%02X", DecryptedKeyBag1[i]);
+  }
+  printf("\n");
+
+  // Parse keybag
+  V8 Key, IV;
+  if (DecryptedKeyBag1.size() != 32 + 16) {
+    cout << "[!] Wrong decrypted keybag size. Expected size == 96 bytes!\n";
+    exit(0);
+  }
+
+  append(IV, DecryptedKeyBag1.data(), 16);
+  append(Key, DecryptedKeyBag1.data() + 16, 32);
+
+  cout << "[*] Decrypted Key: \n";
+  for (int i = 0; i < Key.size(); i++) {
+    printf("%02X", Key[i]);
+  }
+  printf("\n");
+
+  cout << "[*] Decrypted IV: \n";
+  for (int i = 0; i < IV.size(); i++) {
+    printf("%02X", IV[i]);
+  }
+  printf("\n");
+
+  // Decrypt image
+  ASN1DERElement file(workingBuffer.data(), workingBuffer.size());
+  // ASN1DERElement payload = getPayloadFromIM4P(file, IV.data(), Key.data());
+
+  // TODO
+
+  ASN1DERElement payload = file[3];
+  assert(!payload.tag().isConstructed);
+  assert(payload.tag().tagNumber == ASN1DERElement::TagOCTET);
+  assert(payload.tag().tagClass == ASN1DERElement::TagClass::Universal);
+
+  ASN1DERElement decPayload(payload);
+
+  // AES decrypt
+  struct AES_ctx ctx;
+  AES_init_ctx_iv(&ctx, Key.data(), IV.data());
+  AES_CBC_decrypt_buffer(&ctx, (uint8_t *)decPayload.payload(),
+                         decPayload.payloadSize());
+
+  ASN1DERElement finished = unpackKernelIfNeeded(decPayload);
+
+  // Dump
+  ofstream fo(FileName + "_decrypted", ios::binary | ios::out);
+  if (fo.is_open() == false) {
+    cout << "[!] Could not open binary file: '" << FileName << "'\n";
+    exit(0);
+  }
+
+  fo.write((const char *)finished.payload(), finished.payloadSize());
+  f.close();
+
+  cout << "[!] File succesfully decrypted and written to: " + FileName + "_decrypted" + "\n";
+}
+
 ECOMMAND parseCommandLine(int argc, char *argv[]) {
   if (argc < 2) {
     cout << "Usage:\n";
-    cout << "checkm8          - execute checkm8 exploit\n";
-    cout << "enable_jtag      - enable the jtag in an exploited device\n";
-    cout << "read32 <address> - reads 32bit from the given address\n";
-    cout << "read64 <address> - reads 64bit from the given address\n";
+    cout << "checkm8                                         - execute checkm8 "
+            "exploit\n";
+    cout << "enable_jtag                                     - enable the jtag "
+            "in "
+            "an exploited device\n";
+    cout
+        << "read32 address                                  - reads 32bit from "
+           "the given address\n";
+    cout
+        << "read64 address                                  - reads 64bit from "
+           "the given address\n";
+    cout << "decryptIMG filename <optional decrypted keybag> - decrypts a IMG "
+            "file\n";
     cout << "\n";
 
     return ECOMMAND::EXIT;
@@ -488,6 +644,12 @@ ECOMMAND parseCommandLine(int argc, char *argv[]) {
       return ECOMMAND::EXIT;
     }
     return ECOMMAND::READ_U64;
+  } else if (Command == "decryptIMG") {
+    if (argc < 3) {
+      cout << "[!] No filename supplied!\n";
+      return ECOMMAND::EXIT;
+    }
+    return ECOMMAND::DECRYPT_IMG4;
   }
 
   cout << "[!] Unknown command!\n";
@@ -514,6 +676,14 @@ int main(int argc, char *argv[]) {
   case ECOMMAND::READ_U64: {
     uint64_t address = strtoul(argv[2], 0, 0);
     read64(address);
+  } break;
+  case ECOMMAND::DECRYPT_IMG4: {
+    std::string FileName = argv[2];
+    std::string DecryptedKeybag = "";
+    if (argc > 3) {
+      DecryptedKeybag = argv[3];
+    }
+    decryptIMG4(FileName, DecryptedKeybag);
   } break;
   default:
     // Do nothing

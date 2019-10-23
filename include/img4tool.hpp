@@ -63,6 +63,8 @@ std::string getIM4PSHA384(const ASN1DERElement &im4p);
 bool im4mContainsHash(const ASN1DERElement &im4m, std::string hash);
 #endif // HAVE_CRYPTO
 
+ASN1DERElement unpackKernelIfNeeded(const ASN1DERElement &kernelOctet);
+
 ASN1DERElement getEmptyIM4PContainer(const char *type, const char *desc);
 
 ASN1DERElement appendPayloadToIM4P(const ASN1DERElement &im4p, const void *buf,

@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <vector>
 
+#include "img4tool.hpp"
+
 #ifdef _WIN32
 #include <windows.h>
 #elif _POSIX_C_SOURCE >= 199309L
@@ -15,11 +17,19 @@
 #endif
 
 using namespace std;
+using namespace tihmstar::img4tool;
 
 #include "dfu.h"
 #include "usbexec.h"
 
-enum class ECOMMAND { EXIT = 0, CHECKM8, DEMOTE, READ_U32, READ_U64 };
+enum class ECOMMAND {
+  EXIT = 0,
+  CHECKM8,
+  DEMOTE,
+  READ_U32,
+  READ_U64,
+  DECRYPT_IMG4
+};
 
 const int PAYLOAD_OFFSET_ARMV7 = 384;
 const int PAYLOAD_SIZE_ARMV7 = 320;
@@ -459,13 +469,84 @@ void read64(uint64_t address) {
   printf("[*] [%lX] = %016lX\n", address, Value);
 }
 
+void decryptIMG4(std::string FileName) {
+  // Open file
+  ifstream f(FileName, ios::binary | ios::in);
+  if (f.is_open() == false) {
+    cout << "[!] Could not open binary file: '" << FileName << "'\n";
+    exit(0);
+  }
+  f.unsetf(std::ios::skipws);
+  std::streampos fileSize;
+  f.seekg(0, std::ios::end);
+  fileSize = f.tellg();
+  f.seekg(0, std::ios::beg);
+  std::vector<uint8_t> workingBuffer;
+  workingBuffer.reserve(fileSize);
+  workingBuffer.insert(workingBuffer.begin(), std::istream_iterator<uint8_t>(f),
+                       std::istream_iterator<uint8_t>());
+  f.close();
+
+  // Print info and get Keybags
+  vector<string> KeyBags;
+  auto seqName = getNameForSequence(workingBuffer.data(), workingBuffer.size());
+  if (seqName == "IMG4") {
+    printIMG4(workingBuffer.data(), workingBuffer.size(), FLAG_ALL,
+              FLAG_IM4PONLY, KeyBags);
+  } else if (seqName == "IM4P") {
+    printIM4P(workingBuffer.data(), workingBuffer.size(), KeyBags);
+  } else if (seqName == "IM4M") {
+    printIM4M(workingBuffer.data(), workingBuffer.size(), FLAG_ALL);
+  } else {
+    printf("File not recognised");
+    exit(0);
+  }
+
+  // Combine keybag
+  if (KeyBags.size() < 2) {
+    cout << "[!] Could not retrieve keybag!\n";
+    exit(0);
+  }
+
+  std::vector<uint8_t> KeyBag1;
+  append(KeyBag1, (uint8_t *)KeyBags[0].data(), KeyBags[0].size());
+  append(KeyBag1, (uint8_t *)KeyBags[1].data(), KeyBags[1].size());
+
+  // Decrypt keybag
+  DFU d;
+  d.acquire_device();
+  if (d.isExploited() == false) {
+    cout << "[!] Device has to be exploited first!\n";
+    return;
+  }
+
+  // Get serial number
+  auto SerialNumber = d.getSerialNumber();
+  d.release_device();
+
+  // Decrypt GID
+  USBEXEC U(SerialNumber);
+
+  std::vector<uint8_t> DecryptedKeyBag1;
+  U.aes(KeyBag1, AES_DECRYPT, AES_GID_KEY, DecryptedKeyBag1);
+
+  cout << "[*] Decrypted Keybag 1: \n";
+  for (int i = 0; i < DecryptedKeyBag1.size(); i++) {
+    printf("%02X", DecryptedKeyBag1[i]);
+  }
+  printf("\n");
+
+  // Decrypt image
+}
+
 ECOMMAND parseCommandLine(int argc, char *argv[]) {
   if (argc < 2) {
     cout << "Usage:\n";
-    cout << "checkm8          - execute checkm8 exploit\n";
-    cout << "enable_jtag      - enable the jtag in an exploited device\n";
-    cout << "read32 <address> - reads 32bit from the given address\n";
-    cout << "read64 <address> - reads 64bit from the given address\n";
+    cout << "checkm8              - execute checkm8 exploit\n";
+    cout << "enable_jtag          - enable the jtag in an exploited device\n";
+    cout << "read32 <address>     - reads 32bit from the given address\n";
+    cout << "read64 <address>     - reads 64bit from the given address\n";
+    cout << "decryptIMG filename - decrypts a IMG image\n";
     cout << "\n";
 
     return ECOMMAND::EXIT;
@@ -488,6 +569,12 @@ ECOMMAND parseCommandLine(int argc, char *argv[]) {
       return ECOMMAND::EXIT;
     }
     return ECOMMAND::READ_U64;
+  } else if (Command == "decryptIMG") {
+    if (argc < 3) {
+      cout << "[!] No filename supplied!\n";
+      return ECOMMAND::EXIT;
+    }
+    return ECOMMAND::DECRYPT_IMG4;
   }
 
   cout << "[!] Unknown command!\n";
@@ -514,6 +601,10 @@ int main(int argc, char *argv[]) {
   case ECOMMAND::READ_U64: {
     uint64_t address = strtoul(argv[2], 0, 0);
     read64(address);
+  } break;
+  case ECOMMAND::DECRYPT_IMG4: {
+    std::string FileName = argv[2];
+    decryptIMG4(FileName);
   } break;
   default:
     // Do nothing

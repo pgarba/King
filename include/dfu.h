@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#ifndef min
-#define min(a, b) (((a) < (b)) ? (a) : (b))
+#ifndef lmin
+#define lmin(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
 using namespace std;

@@ -254,8 +254,10 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
   appendV(Request, data);
   auto rawRequest = libusb1_create_ctrl_transfer(Request, request_timeout);
 
+  // Debug out
   printBuffer(Request);
 
+  // Submit transfer
   int r = libusb_submit_transfer(rawRequest);
   if (r) {
     printf("[!] libusb_submit_transfer failed! %d %s\n", r,
@@ -307,7 +309,7 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
 void DFU::send_data(vector<uint8_t> data) {
   int index = 0;
   while (index < data.size()) {
-    int amount = min(data.size() - index, MAX_PACKET_SIZE);
+    int amount = lmin(data.size() - index, MAX_PACKET_SIZE);
 
     vector<uint8_t> response;
     auto r = my_libusb_control_transfer(

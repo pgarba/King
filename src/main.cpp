@@ -664,6 +664,8 @@ void decryptIMG4(std::string FileName, std::string DecryptedKeyBag)
 
   fo.write((const char *)finished.payload(), finished.payloadSize());
   f.close();
+
+  cout << "[!] File succesfully decrypted and written to: " + FileName + "_decrypted" + "\n";
 }
 
 ECOMMAND parseCommandLine(int argc, char *argv[])

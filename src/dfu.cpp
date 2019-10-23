@@ -67,6 +67,16 @@ int DFU::my_libusb_control_transfer(libusb_device_handle *dev_handle,
                                     unsigned char *data, uint16_t wLength,
                                     unsigned int timeout,
                                     vector<uint8_t> &dataOut) {
+
+  /*
+    Check if data == 0 then create a buffer
+  */
+  vector<uint8_t> myData;
+  myData.insert(myData.end(), myData.size(), 0);
+  if (data == nullptr) {
+    data = myData.data();
+  }
+
   struct libusb_transfer *transfer;
   unsigned char *buffer;
   int completed = 0;
@@ -302,8 +312,8 @@ bool DFU::libusb1_no_error_ctrl_transfer(uint8_t bmRequestType,
   // Crash on Windows because data will be written back to nullptr data.
   // should also crazy in the python version ...
   // our own version will work
-  my_libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue, wIndex,
-                          data, length, timeout, response);
+  my_libusb_control_transfer(this->devh, bmRequestType, bRequest, wValue,
+                             wIndex, data, length, timeout, response);
 
   return false;
 }
@@ -314,9 +324,14 @@ void DFU::send_data(vector<uint8_t> data) {
     int amount = min(data.size() - index, MAX_PACKET_SIZE);
 
     vector<uint8_t> response;
-    auto r = my_libusb_control_transfer(this->devh, 0x21, 1, 0, 0,
-                                     &data.data()[index], amount, 5000, response);
-    assert(r == amount);
+    auto r = my_libusb_control_transfer(
+        this->devh, 0x21, 1, 0, 0, &data.data()[index], amount, 5000, response);
+    if (r != amount) {
+      printf("[!] send_data failed! Aborting!\n");
+      usb_reset();
+      this->release_device();
+      exit(0);
+    }
 
     index += amount;
   }

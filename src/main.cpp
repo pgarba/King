@@ -543,8 +543,6 @@ void writeFile(std::string FileName, const uint8_t *Data, size_t Size)
   }
   fo.write((const char *)Data, Size);
   fo.close();
-
-  cout << "[!] File succesfully decrypted and written to: " + FileName + "_decrypted" + "\n";
 }
 
 void decryptIMG4(std::string FileName, std::string DecryptedKeyBag)

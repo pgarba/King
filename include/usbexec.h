@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <string.h>
 #include <string>
 #include <vector>
 
@@ -94,11 +95,13 @@ public:
     this->aes_crypto_cmd = aes_crypto_cmd;
   }
 
-  bool match(string info) {
-    // return info == self.info[0].ljust(0x40, '\0') + self.info[1].ljust(0x40,
-    // '\0') + self.info[2].ljust(0x80, '\0')
-    // TODO
-    return false;
+  bool match(uint8_t * info) {
+    uint8_t self_match[0x100];
+    memset(self_match, 0, sizeof(self_match));
+    strcpy((char*)&self_match[0], this->SecureROMVersion.c_str());
+    strcpy((char*)&self_match[0x40], this->Type.c_str());
+    strcpy((char*)&self_match[0x80], this->IBootVersion.c_str());
+    return memcmp(self_match, info, sizeof(self_match)) == 0;
   }
 
   string SecureROMVersion;
@@ -109,13 +112,7 @@ public:
 
 class USBEXEC {
 public:
-  USBEXEC(string serial_number) {
-    this->serial_number = serial_number;
-
-    // Set fixed t8010 config for now
-    this->config = &this->configs[0];
-    this->platform = &this->all_platforms[0];
-  }
+  USBEXEC(string serial_number);
 
   void write_memory(uint64_t address, vector<uint8_t> data);
   vector<uint8_t> read_memory(uint64_t address, int length);
@@ -153,6 +150,11 @@ public:
         Load the image base
   */
   uint64_t load_base();
+
+  /*
+        Image base address
+  */
+  uint64_t image_base();
 
   /*
         Get the demotion reg offset

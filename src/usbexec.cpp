@@ -24,13 +24,62 @@ static void printBuffer(uint8_t *V, int Size) {
   printf("\n");
 }
 
+USBEXEC::USBEXEC(string serial_number) {
+  this->serial_number = serial_number;
+  char match_string[64];
+
+
+  for (DevicePlatform& dp : all_platforms)
+  {
+    sprintf(match_string, "CPID:%04x CPRV:%02x ", dp.cpid, dp.cprv);
+    if (this->serial_number.find(match_string) == 0)
+    {
+      this->platform = &dp;
+      break;
+    }
+  }
+
+  if (this->platform == nullptr)
+  {
+    printf("[!] No matching platform found for this device!\n");
+    exit(0);
+  }
+
+  vector<uint8_t> info = this->read_memory(this->image_base() + 0x200, 0x100);
+
+  for (ExecConfig& config : configs)
+  {
+    if (config.match(info.data()))
+    {
+      this->config = &config;
+      break;
+    }
+  }
+
+  if (this->config == nullptr)
+  {
+    printf("[!] No matching config found for this image!\n");
+    exit(0);
+  }
+}
+
 uint64_t USBEXEC::getDemotionReg() { return this->platform->demotion_reg; }
+
 
 uint64_t USBEXEC::load_base() {
   if (serial_number.find("SRTG") != string::npos) {
     return this->platform->dfu_image_base;
   } else {
     return this->platform->dfu_load_base;
+  }
+}
+
+uint64_t USBEXEC::image_base() {
+  if (serial_number.find("SRTG") != string::npos) {
+    return this->platform->rom_base;
+  }
+  else {
+    return this->platform->dfu_image_base;
   }
 }
 

@@ -44,12 +44,22 @@ public:
     this->sep_nonce_length = sep_nonce_length;
     this->demotion_reg = demotion_reg;
 
-    if (cpid == 0x8010) {
+    if (cpid == 0x8010)
+    {
       this->dfu_image_base = 0x1800B0000;
       this->dfu_load_base = 0x800000000;
       this->recovery_image_base = 0x1800B0000;
       this->recovery_load_base = 0x800000000;
-    } else {
+    }
+    else if (cpid == 0x7000 || cpid == 0x8000 || cpid == 0x8003)
+    {
+      this->dfu_image_base = 0x180380000;
+      this->dfu_load_base = 0x180000000;
+      this->recovery_image_base = 0x83D7F7000;
+      this->recovery_load_base = 0x800000000;
+    }
+    else
+    {
       assert(0 && "Not implemented");
     }
   }
@@ -164,11 +174,32 @@ private:
   string serial_number;
   vector<ExecConfig> configs = {
       ExecConfig("SecureROM for t8010si, Copyright 2007-2015, Apple Inc.",
-                 "ROMRELEASE", "iBoot-2696.0.0.1.33", 0x10000C8F4)};
-  vector<DevicePlatform> all_platforms = {DevicePlatform(
-      0x8010, 0x11, 0x01, "arm64", "iBoot-2696.0.0.1.33", 0x100000000, 0x20000,
-      "41a488b3c46ff06c1a2376f3405b079fb0f15316", 0x180000000, 0x200000,
-      0x800000000, 32, 20, 0x2102BC000)};
+                 "ROMRELEASE", "iBoot-2696.0.0.1.33", 0x10000C8F4),
+      ExecConfig("SecureROM for t7000si, Copyright 2013, Apple Inc.",
+                 "RELEASE", "iBoot-1992.0.0.1.19", 0x10000DA90),
+      ExecConfig("SecureROM for s8000si, Copyright 2007-2014, Apple Inc.",
+                 "RELEASE", "iBoot-2234.0.0.3.3", 0x10000DAA0),
+      ExecConfig("SecureROM for s8003si, Copyright 2007-2014, Apple Inc.",
+                 "RELEASE", "iBoot-2234.0.0.2.22", 0x10000DAA0),
+  };
+  vector<DevicePlatform> all_platforms = {
+      DevicePlatform(0x8010, 0x11, 0x01, "arm64", "iBoot-2696.0.0.1.33",
+                     0x100000000, 0x20000, "41a488b3c46ff06c1a2376f3405b079fb0f15316",
+                     0x180000000, 0x200000, 0x800000000,
+                     32, 20, 0x2102BC000),
+      DevicePlatform(0x7000, 0x11, 0x01, "arm64", "iBoot-1992.0.0.1.19",
+                     0x100000000, 0x80000, "c4dcd22ae135c14244fc2b62165c85effa566bfe",
+                     0x180000000, 0x400000, 0x800000000,
+                     20, 20, 0x20E02A000),
+      DevicePlatform(0x8000, 0x20, 0x01, "arm64", "iBoot-2234.0.0.3.3",
+                     0x100000000, 0x80000, "9979dce30e913c888cf77234c7a7e2a7fa676f4c",
+                     0x180000000, 0x400000, 0x800000000,
+                     32, 20, 0x2102BC000),
+      DevicePlatform(0x8000, 0x20, 0x01, "arm64", "iBoot-2234.0.0.2.22",
+                     0x100000000, 0x80000, "93d69e2430e2f0c161e3e1144b69b4da1859169b",
+                     0x180000000, 0x400000, 0x800000000,
+                     32, 20, 0x2102BC000)
+  };
 
   ExecConfig *config;
   DevicePlatform *platform;

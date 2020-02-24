@@ -29,7 +29,7 @@ USBEXEC::USBEXEC(string serial_number) {
   char match_string[64];
 
 
-  for (DevicePlatform& dp : all_platforms)
+  for (const DevicePlatform& dp : all_platforms)
   {
     sprintf(match_string, "CPID:%04x CPRV:%02x ", dp.cpid, dp.cprv);
     if (this->serial_number.find(match_string) == 0)
@@ -47,7 +47,7 @@ USBEXEC::USBEXEC(string serial_number) {
 
   vector<uint8_t> info = this->read_memory(this->image_base() + 0x200, 0x100);
 
-  for (ExecConfig& config : configs)
+  for (const ExecConfig& config : configs)
   {
     if (config.match(info.data()))
     {

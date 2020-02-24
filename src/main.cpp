@@ -5,6 +5,7 @@
 #include <iterator>
 #include <stdio.h>
 #include <vector>
+#include <inttypes.h>
 
 #include "img4tool.hpp"
 
@@ -711,7 +712,7 @@ void read32(uint64_t address)
   USBEXEC U(SerialNumber);
   uint32_t Value = U.read_memory_uint32(address);
 
-  printf("[*] [%lX] = %08X\n", address, Value);
+  printf("[*] [%" PRIx64 "] = %08" PRIx32 "\n", address, Value);
 }
 
 void read64(uint64_t address)
@@ -732,7 +733,7 @@ void read64(uint64_t address)
   USBEXEC U(SerialNumber);
   uint64_t Value = U.read_memory_uint64(address);
 
-  printf("[*] [%lX] = %016lX\n", address, Value);
+  printf("[*] [%" PRIx64 "] = %016" PRIx64 "\n", address, Value);
 }
 
 void writeFile(std::string FileName, const uint8_t *Data, size_t Size)
@@ -947,13 +948,13 @@ int main(int argc, char *argv[])
     break;
   case ECOMMAND::READ_U32:
   {
-    uint64_t address = strtoul(argv[2], 0, 0);
+    uint64_t address = strtoull(argv[2], 0, 0);
     read32(address);
   }
   break;
   case ECOMMAND::READ_U64:
   {
-    uint64_t address = strtoul(argv[2], 0, 0);
+    uint64_t address = strtoull(argv[2], 0, 0);
     read64(address);
   }
   break;

@@ -95,7 +95,7 @@ public:
     this->aes_crypto_cmd = aes_crypto_cmd;
   }
 
-  bool match(uint8_t * info) {
+  bool match(uint8_t * info) const {
     uint8_t self_match[0x100];
     memset(self_match, 0, sizeof(self_match));
     strcpy((char*)&self_match[0], this->SecureROMVersion.c_str());
@@ -203,8 +203,8 @@ private:
                      32, 20, 0x2102BC000)
   };
 
-  ExecConfig *config;
-  DevicePlatform *platform;
+  const ExecConfig *config;
+  const DevicePlatform *platform;
 };
 
 #endif

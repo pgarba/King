@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.5.1)
 project(king)
 set(CMAKE_CXX_STANDARD 14)
 
 # libusb-1.0 on windows
 if(DEFINED WIN32)
-	SET(LIBUSB10_PATH "c:/checkm8/libusb_win/" CACHE PATH "Path to libusb1-0 directory")
+    set(LIBUSB10_PATH "c:/checkm8/libusb_win/" CACHE PATH "Path to libusb1-0 directory")
 endif()
 
 set(SOURCE_FILES 
@@ -21,9 +21,9 @@ add_executable(king ${SOURCE_FILES})
 target_include_directories(king PRIVATE include)
 
 if(DEFINED WIN32) 
-	target_include_directories(king PRIVATE ${LIBUSB10_PATH}/include)
-	target_link_directories(king PRIVATE ${LIBUSB10_PATH}/lib)
-	TARGET_LINK_LIBRARIES(king libusb-1.0 Ws2_32.lib)
+    target_include_directories(king PRIVATE ${LIBUSB10_PATH}/include)
+    find_library(LIBUSB10 NAMES libusb-1.0.lib PATHS ${LIBUSB10_PATH}/lib)
+    target_link_libraries(king ${LIBUSB10} Ws2_32.lib)
 else()
-	TARGET_LINK_LIBRARIES(king usb-1.0)
+    target_link_libraries(king usb-1.0)
 endif()

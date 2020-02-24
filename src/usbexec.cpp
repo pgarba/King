@@ -29,7 +29,7 @@ USBEXEC::USBEXEC(string serial_number) {
   char match_string[64];
 
 
-  for (DevicePlatform& dp : all_platforms)
+  for (const DevicePlatform& dp : all_platforms)
   {
     sprintf(match_string, "CPID:%04x CPRV:%02x ", dp.cpid, dp.cprv);
     if (this->serial_number.find(match_string) == 0)
@@ -47,7 +47,7 @@ USBEXEC::USBEXEC(string serial_number) {
 
   vector<uint8_t> info = this->read_memory(this->image_base() + 0x200, 0x100);
 
-  for (ExecConfig& config : configs)
+  for (const ExecConfig& config : configs)
   {
     if (config.match(info.data()))
     {
@@ -72,6 +72,14 @@ uint64_t USBEXEC::load_base() {
   } else {
     return this->platform->dfu_load_base;
   }
+}
+
+uint64_t USBEXEC::rom_base() {
+    return platform->rom_base;
+}
+
+uint64_t USBEXEC::rom_size() {
+    return platform->rom_size;
 }
 
 uint64_t USBEXEC::image_base() {
@@ -169,7 +177,7 @@ vector<uint8_t> USBEXEC::read_memory(uint64_t address, int length) {
 
   while (data.size() < length) {
     uint64_t part_length = lmin((length - data.size()),
-                                (USB_READ_LIMIT - this->cmd_data_address(0)));
+                                (USB_READ_LIMIT - this->cmd_data_offset(0)));
 
     auto cmd_mcp = this->cmd_memcpy(cmd_data_address(0), address + data.size(),
                                     part_length);

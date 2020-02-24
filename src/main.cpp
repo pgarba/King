@@ -34,7 +34,8 @@ enum class ECOMMAND
   DEMOTE,
   READ_U32,
   READ_U64,
-  DECRYPT_IMG4
+  DECRYPT_IMG4,
+  HEXDUMP
 };
 
 const int PAYLOAD_OFFSET_ARMV7 = 384;
@@ -736,6 +737,43 @@ void read64(uint64_t address)
   printf("[*] [%" PRIx64 "] = %016" PRIx64 "\n", address, Value);
 }
 
+void hexdump(uint64_t address, int size)
+{
+  DFU d;
+  d.acquire_device();
+  if (d.isExploited() == false)
+  {
+    cout << "[!] Device has to be exploited first!\n";
+    return;
+  }
+  auto SerialNumber = d.getSerialNumber();
+  d.release_device();
+
+  USBEXEC U(SerialNumber);
+  vector<uint8_t> dump = U.read_memory(address, size);
+
+  for (int i = 0; i < size; i += 16)
+  {
+    printf("%016" PRIx64 ":", address + i);
+    for (int j = 0; j < 16; j++)
+    {
+      if (i + j < dump.size())
+        printf(" %02x", dump[i + j]);
+      else
+        printf("   ");
+    }
+    printf("  ");
+    for (int j = 0; j < 16; j++)
+    {
+      if (i + j < dump.size() && 0x20 <= dump[i + j] && dump[i + j] < 0x7f)
+        printf("%c", dump[i + j]);
+      else
+        printf(".");
+    }
+    printf("\n");
+  }
+}
+
 void writeFile(std::string FileName, const uint8_t *Data, size_t Size)
 {
   ofstream fo(FileName + "_decrypted", ios::binary | ios::out);
@@ -889,6 +927,7 @@ ECOMMAND parseCommandLine(int argc, char *argv[])
            "the given address\n";
     cout << "decryptIMG filename <optional decrypted keybag> - decrypts a IMG "
             "file\n";
+    cout << "hexdump address size                            - print hexdump\n";
     cout << "\n";
 
     return ECOMMAND::EXIT;
@@ -925,6 +964,15 @@ ECOMMAND parseCommandLine(int argc, char *argv[])
       return ECOMMAND::EXIT;
     }
     return ECOMMAND::DECRYPT_IMG4;
+  }
+  else if (Command == "hexdump")
+  {
+    if (argc < 4)
+    {
+      cout << "[!] No address or size supplied!\n";
+      return ECOMMAND::EXIT;
+    }
+    return ECOMMAND::HEXDUMP;
   }
 
   cout << "[!] Unknown command!\n";
@@ -969,6 +1017,13 @@ int main(int argc, char *argv[])
     decryptIMG4(FileName, DecryptedKeybag);
   }
   break;
+  case ECOMMAND::HEXDUMP:
+  {
+    uint64_t address = strtoull(argv[2], 0, 0);
+    int size = strtol(argv[3], 0, 0);
+    if (size < 0) size = 0;
+    hexdump(address, size);
+  }
   default:
     // Do nothing
     break;

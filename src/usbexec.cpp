@@ -169,7 +169,7 @@ vector<uint8_t> USBEXEC::read_memory(uint64_t address, int length) {
 
   while (data.size() < length) {
     uint64_t part_length = lmin((length - data.size()),
-                                (USB_READ_LIMIT - this->cmd_data_address(0)));
+                                (USB_READ_LIMIT - this->cmd_data_offset(0)));
 
     auto cmd_mcp = this->cmd_memcpy(cmd_data_address(0), address + data.size(),
                                     part_length);

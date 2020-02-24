@@ -2,10 +2,11 @@
 
 Port of axi0mX's check-m8 exploit (<https://github.com/axi0mX/ipwndfu>) to C/C++
 
-It works fine on Ubuntu 19.10 and compiles on Windows.
+It works on Ubuntu 19.10 and Windows and supports the iPhone7 t8010(iBoot-2696.0.0.1.33) and the iPhone6 (thanks a1exdand).
 
-So far I only ported the t8010(iBoot-2696.0.0.1.33) exploit which is working fine on my iPhone 7
+For Windows use the zadig libusbk driver that contains this fix:
 
+https://github.com/libusb/libusb/pull/699
 
 # Compilation
 
@@ -79,7 +80,3 @@ DF97....15CE
 DF........E7
 [!] File succesfully decrypted and written to: iBoot.d10.RELEASE.im4p_decrypted
 ```
-
-# Limitations
-
-I only ported the t8010 exploit and so far it fails on Windows (WIP!)

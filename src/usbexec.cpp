@@ -74,6 +74,14 @@ uint64_t USBEXEC::load_base() {
   }
 }
 
+uint64_t USBEXEC::rom_base() {
+    return platform->rom_base;
+}
+
+uint64_t USBEXEC::rom_size() {
+    return platform->rom_size;
+}
+
 uint64_t USBEXEC::image_base() {
   if (serial_number.find("SRTG") != string::npos) {
     return this->platform->rom_base;

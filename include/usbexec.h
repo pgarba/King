@@ -146,6 +146,8 @@ public:
   */
   void write_memory_uint32(uint64_t address, uint32_t value);
 
+  uint64_t rom_base();
+  uint64_t rom_size();
   /*
         Load the image base
   */

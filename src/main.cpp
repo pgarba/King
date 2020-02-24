@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <vector>
 #include <inttypes.h>
+#include <algorithm>
 
 #include "img4tool.hpp"
 
@@ -35,7 +36,8 @@ enum class ECOMMAND
   READ_U32,
   READ_U64,
   DECRYPT_IMG4,
-  HEXDUMP
+  HEXDUMP,
+  DUMPROM
 };
 
 const int PAYLOAD_OFFSET_ARMV7 = 384;
@@ -786,6 +788,63 @@ void writeFile(std::string FileName, const uint8_t *Data, size_t Size)
   fo.close();
 }
 
+void dumprom()
+{
+  DFU d;
+  d.acquire_device();
+  if (d.isExploited() == false)
+  {
+    cout << "[!] Device has to be exploited first!\n";
+    return;
+  }
+  auto SerialNumber = d.getSerialNumber();
+  d.release_device();
+
+  USBEXEC U(SerialNumber);
+  vector<uint8_t> dump = U.read_memory(U.rom_base(), U.rom_size());
+  vector<uint8_t>::const_iterator chip_begin = dump.cbegin() + 0x200;
+  vector<uint8_t>::const_iterator find_end = chip_begin + 0x40;
+  for (int i = 0; i < 2; i++)
+  {
+    chip_begin = find(chip_begin, find_end, ' ') + 1;
+    if (chip_begin == find_end) break;
+  }
+  vector<uint8_t>::const_iterator chip_end = find(chip_begin, find_end, ',');
+
+  string chip = "unknown";
+  if (chip_begin != find_end && chip_end != find_end)
+    chip = string(chip_begin, chip_end);
+
+  vector<uint8_t>::const_iterator kind_begin = dump.cbegin() + 0x240;
+  find_end = kind_begin + 0x40;
+  vector<uint8_t>::const_iterator kind_end = find(kind_begin, find_end, '\0');
+
+  string kind = "unknown";
+  if (kind_end != find_end)
+    kind = string(kind_begin, kind_end);
+
+  vector<uint8_t>::const_iterator version_begin = dump.cbegin() + 0x280;
+  find_end = version_begin + 0x40;
+  version_begin = find(version_begin, find_end, '-');
+
+  vector<uint8_t>::const_iterator version_end = find(version_begin, find_end, '\0');
+
+  string version = "unknown";
+  if (version_begin != find_end && version_end != find_end)
+    version = string(version_begin + 1, version_end);
+
+  string filename = "SecureROM-" + chip + "-" + kind + "-" + version + ".dump";
+  ofstream fo(filename, ios::binary | ios::out);
+  if (fo.is_open() == false)
+  {
+    cout << "[!] Could not open binary file: '" << filename << "'\n";
+    exit(0);
+  }
+  fo.write((char *)dump.data(), dump.size());
+  fo.close();
+  cout << "Saved: " << filename << endl;
+}
+
 void decryptIMG4(std::string FileName, std::string DecryptedKeyBag)
 {
   cout << "decryptIMG4\n";
@@ -928,6 +987,7 @@ ECOMMAND parseCommandLine(int argc, char *argv[])
     cout << "decryptIMG filename <optional decrypted keybag> - decrypts a IMG "
             "file\n";
     cout << "hexdump address size                            - print hexdump\n";
+    cout << "dump-rom                                        - print SecureROM\n";
     cout << "\n";
 
     return ECOMMAND::EXIT;
@@ -973,6 +1033,10 @@ ECOMMAND parseCommandLine(int argc, char *argv[])
       return ECOMMAND::EXIT;
     }
     return ECOMMAND::HEXDUMP;
+  }
+  else if (Command == "dump-rom")
+  {
+    return ECOMMAND::DUMPROM;
   }
 
   cout << "[!] Unknown command!\n";
@@ -1024,6 +1088,12 @@ int main(int argc, char *argv[])
     if (size < 0) size = 0;
     hexdump(address, size);
   }
+  break;
+  case ECOMMAND::DUMPROM:
+  {
+    dumprom();
+  }
+  break;
   default:
     // Do nothing
     break;

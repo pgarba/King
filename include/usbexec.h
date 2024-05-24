@@ -59,6 +59,13 @@ public:
       this->recovery_image_base = 0x83D7F7000;
       this->recovery_load_base = 0x800000000;
     }
+    else if (cpid == 0x8015) 
+    {
+      this->dfu_image_base = 0x18001C000;
+      this->dfu_load_base = 0x800000000;
+      this->recovery_image_base = 0x18001C000;
+      this->recovery_load_base = 0x800000000;
+    }
     else
     {
       assert(0 && "Not implemented");
@@ -185,6 +192,8 @@ private:
                  "RELEASE", "iBoot-2234.0.0.3.3", 0x10000DAA0),
       ExecConfig("SecureROM for s8003si, Copyright 2007-2014, Apple Inc.",
                  "RELEASE", "iBoot-2234.0.0.2.22", 0x10000DAA0),
+      ExecConfig("SecureROM for t8015si, Copyright 2007-2016, Apple Inc.",
+                 "ROMRELEASE", "iBoot-3332.0.0.1.23", 0x100009E9C),
   };
   vector<DevicePlatform> all_platforms = {
       DevicePlatform(0x8010, 0x11, 0x01, "arm64", "iBoot-2696.0.0.1.33",
@@ -202,7 +211,11 @@ private:
       DevicePlatform(0x8000, 0x20, 0x01, "arm64", "iBoot-2234.0.0.2.22",
                      0x100000000, 0x80000, "93d69e2430e2f0c161e3e1144b69b4da1859169b",
                      0x180000000, 0x400000, 0x800000000,
-                     32, 20, 0x2102BC000)
+                     32, 20, 0x2102BC000),
+      DevicePlatform(0x8015, 0x11, 0x01, "arm64", "iBoot-3332.0.0.1.23",
+                     0x100000000, 0x100000, "96fccb1a63de1a2d50ff14555d3898a5af46e9b1",
+                     0x180000000, 0x200000, 0x800000000,
+                     32, 20, 0x2352BC000),
   };
 
   const ExecConfig *config;

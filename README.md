@@ -20,6 +20,8 @@ Port of [@axi0mX's](https://twitter.com/axi0mx) checkm8 exploit ([ipwndfu](https
   * `iPad (6th generation)`
   * `iPhone 7`
   * `iPhone 7 Plus`
+*  `T8015`
+  * `Let me know!`    
 
 **Works on:**
 

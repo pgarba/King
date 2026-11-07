@@ -21,6 +21,11 @@
 using namespace std;
 using namespace tihmstar::img4tool;
 
+// gaster-based checkm8 (src/gaster.c), used for A8/A9 where its adaptive USB
+// abort-timing lands on hosts (e.g. pure-xHCI/AMD) that the ipwndfu-style
+// fixed-timing exploit cannot. Returns 0 on success.
+extern "C" int king_gaster_checkm8(void);
+
 #define AES256 1
 #include "aes.hpp"
 #include "dfu.h"
@@ -788,34 +793,17 @@ void checkm8_A8_A9()
 
 void runCheckm8()
 {
-  DFU D;
-  if (!D.acquire_device())
-  {
-    printf("[!] Failed to find device!\n");
-    return;
-  }
-
-  auto serial = D.getSerialNumber();
-  D.release_device();
-
-  if (serial.find("CPID:7000 CPRV:11") != string::npos ||
-      serial.find("CPID:8000 CPRV:20") != string::npos ||
-      serial.find("CPID:8003 CPRV:01") != string::npos)
-    checkm8_A8_A9();
-  else {
-    if (serial.find("CPID:8015") != string::npos) {
-      // Create device config
-      t8015_overwrite Overwrite;
-      checkm8(DeviceConfig("iBoot-3332.0.0.1.23", 0x8015, 0, (uint8_t *)&Overwrite,
-                        sizeof(Overwrite), 6, 1));
-    } else if (serial.find("CPID:8010") != string::npos) {
-      // Create device config
-      t8010_overwrite Overwrite;
-      checkm8(DeviceConfig("iBoot-2696.0.0.1.33", 0x8010, 0, (uint8_t *)&Overwrite,
-                        sizeof(Overwrite), 5, 1));
-    }
-
-  }
+  // Route straight to the gaster-based exploit engine. It does its own robust,
+  // default-context device detection and supports every SoC King targets
+  // (A8/A9/A10/A11), with an adaptive abort-timing sweep that lands on hosts the
+  // old fixed-timing path cannot (e.g. pure-xHCI/AMD).
+  //
+  // NOTE: we deliberately do NOT pre-read the serial with King's own DFU class
+  // first. That read uses a non-default libusb context (which libusb warns about
+  // and which is unreliable here), and repeatedly claiming the interface and
+  // timing out can wedge the device so that the exploit can no longer talk to
+  // it. The legacy checkm8()/checkm8_A8_A9() paths are kept below for reference.
+  king_gaster_checkm8();
 }
 
 void demoteDevice()

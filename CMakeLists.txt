@@ -14,6 +14,7 @@ src/ASN1DERElement.cpp
 src/lzssdec.c
 src/img4tool.cpp
 src/aes.c
+src/gaster.c
 )
 
 add_executable(king ${SOURCE_FILES})

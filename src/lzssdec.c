@@ -14,7 +14,11 @@
 #include <string.h>
 #include <sys/types.h>
 //#include <img4tool/libgeneral/macros.h>
-//#include <arpa/inet.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
+#endif
 #include <string.h>
 
 /*

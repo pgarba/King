@@ -14,6 +14,10 @@
  */
 #define HAVE_LIBUSB 1
 #include <libusb-1.0/libusb.h>
+#if defined(_WIN32)
+#include <windows.h>
+#include <timeapi.h>
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -187,6 +191,9 @@ sleep_ms(unsigned ms) {
 #ifdef HAVE_LIBUSB
 static void
 close_usb_handle(usb_handle_t *handle) {
+#if defined(_WIN32)
+	libusb_release_interface(handle->device, 0);
+#endif
 	libusb_close(handle->device);
 	libusb_exit(NULL);
 }
@@ -202,6 +209,18 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 		printf("[libusb] Waiting for the USB handle with VID: 0x%" PRIX16 ", PID: 0x%" PRIX16 "\n", handle->vid, handle->pid);
 		for(;;) {
 			if((handle->device = libusb_open_device_with_vid_pid(NULL, handle->vid, handle->pid)) != NULL) {
+#if defined(_WIN32)
+				/* On Windows (WinUSB/libusbK) EP0 control transfers are only
+				 * routed once an interface is claimed; without this every
+				 * control request times out (LIBUSB_ERROR_TIMEOUT) and the
+				 * device is never recognised. Linux/macOS do not need this, so
+				 * it is Windows-only to leave those paths unchanged. */
+				if(libusb_claim_interface(handle->device, 0) != LIBUSB_SUCCESS) {
+					libusb_close(handle->device);
+					sleep_ms(usb_timeout);
+					continue;
+				}
+#endif
 				/* Do NOT call libusb_set_configuration() here. The device is
 				 * already in configuration 1, and the Apple DFU USB stack does
 				 * not answer a redundant SET_CONFIGURATION request: on Linux the
@@ -212,6 +231,9 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 					puts("Found the USB handle.");
 					return true;
 				}
+#if defined(_WIN32)
+				libusb_release_interface(handle->device, 0);
+#endif
 				libusb_close(handle->device);
 			}
 			sleep_ms(usb_timeout);
@@ -1118,6 +1140,15 @@ int
 king_gaster_checkm8(void) {
 	char *env_usb_timeout = getenv("USB_TIMEOUT"), *env_usb_abort_timeout_min = getenv("USB_ABORT_TIMEOUT_MIN");
 	usb_handle_t handle;
+	int __ret;
+
+#if defined(_WIN32)
+	/* checkm8's leak race relies on sub-millisecond abort timing, but the
+	 * default Windows scheduler/timer granularity is ~15.6ms, which quantises
+	 * every Sleep()/event timeout and makes the race impossible to win.
+	 * Raise the timer resolution to 1ms for the duration of the exploit. */
+	timeBeginPeriod(1);
+#endif
 
 	if(env_usb_timeout == NULL || sscanf(env_usb_timeout, "%u", &usb_timeout) != 1 || usb_timeout < 1) {
 		usb_timeout = 100;
@@ -1127,5 +1158,9 @@ king_gaster_checkm8(void) {
 		usb_abort_timeout_min = 0;
 	}
 	printf("usb_abort_timeout_min: %u\n", usb_abort_timeout_min);
-	return gaster_checkm8(&handle) ? 0 : -1;
+	__ret = gaster_checkm8(&handle) ? 0 : -1;
+#if defined(_WIN32)
+	timeEndPeriod(1);
+#endif
+	return __ret;
 }

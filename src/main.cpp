@@ -1190,6 +1190,10 @@ ECOMMAND parseCommandLine(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+  // Emit progress immediately (unbuffered) so exploit stage messages are
+  // visible live even when stdout is redirected to a pipe or file.
+  setvbuf(stdout, NULL, _IONBF, 0);
+
   ECOMMAND C = parseCommandLine(argc, argv);
   switch (C)
   {

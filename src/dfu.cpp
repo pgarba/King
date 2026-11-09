@@ -7,6 +7,34 @@
 #include <string>
 #include <time.h>
 
+#if defined(_WIN32)
+// MSVC/Windows lacks the POSIX monotonic clock and nanosleep used below.
+// Provide minimal shims so the timing call sites compile unchanged.
+// struct timespec is already defined by <time.h> on VS2015+.
+#include <windows.h>
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC 1
+#endif
+static int clock_gettime(int /*clk_id*/, struct timespec *ts)
+{
+  static LARGE_INTEGER freq;
+  if (freq.QuadPart == 0)
+    QueryPerformanceFrequency(&freq);
+  LARGE_INTEGER counter;
+  QueryPerformanceCounter(&counter);
+  ts->tv_sec = (time_t)(counter.QuadPart / freq.QuadPart);
+  long long rem = counter.QuadPart % freq.QuadPart;
+  ts->tv_nsec = (long)((rem * 1000000000LL) / freq.QuadPart);
+  return 0;
+}
+static int nanosleep(const struct timespec *req, struct timespec * /*rem*/)
+{
+  DWORD ms = (DWORD)(req->tv_sec * 1000LL + req->tv_nsec / 1000000LL);
+  Sleep(ms);
+  return 0;
+}
+#endif
+
 static void printBuffer(std::vector<uint8_t> &V)
 {
 #ifndef DEBUG

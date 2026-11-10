@@ -1,5 +1,6 @@
 #include "usbexec.h"
 #include "dfu.h"
+#include <cinttypes>
 #include <iostream>
 
 static void printBuffer(std::vector<uint8_t> &V) {
@@ -185,19 +186,23 @@ vector<uint8_t> USBEXEC::read_memory(uint64_t address, int length) {
     // Send to iPhone
     auto result = this->command(cmd_mcp, cmd_data_offset(0) + part_length);
 
-    // Verify result
-    printBuffer(result);
-
-    if (result.size() < 8 && (*(uint64_t *)result.data()) != DONE_MAGIC) {
-      cout << "[!] Wrong response retrieved. Aborting!\n";
+    // A faulted or short device response means the on-device memcpy failed --
+    // e.g. the source address is unmapped in the exploit payload's context
+    // (reading a device/MMIO register such as the demotion reg can do this).
+    // Bail out cleanly instead of indexing a backwards range
+    // [result.data()+16 .. result.data()+size) with size < 16, which is UB:
+    // it crashes the process and leaves the device's control endpoint wedged.
+    if (result.size() < this->cmd_data_offset(0) + part_length) {
+      cout << "[!] Short response (" << result.size() << " bytes) reading 0x"
+           << hex << (address + data.size()) << dec
+           << " -- device memcpy likely faulted. Aborting read.\n";
+      break;
     }
 
     // Append result
     data.insert(data.end(), result.data() + cmd_data_offset(0),
                 result.data() + result.size());
   }
-
-  printBuffer(data);
 
   return data;
 }
@@ -212,18 +217,26 @@ void USBEXEC::write_memory(uint64_t address, vector<uint8_t> data) {
 
 uint32_t USBEXEC::read_memory_uint32(uint64_t address) {
   auto value = read_memory(address, 4);
-  printBuffer(value);
 
-  assert(value.size() == 4);
+  // read_memory may return short on a faulted read (asserts are compiled out
+  // in release builds, so guard explicitly instead of dereferencing OOB).
+  if (value.size() < 4) {
+    printf("[!] read_memory_uint32(0x%" PRIx64 ") failed (got %zu bytes)\n",
+           address, value.size());
+    return 0;
+  }
 
   return *(uint32_t *)value.data();
 }
 
 uint64_t USBEXEC::read_memory_uint64(uint64_t address) {
   auto value = read_memory(address, 8);
-  printBuffer(value);
 
-  assert(value.size() == 8);
+  if (value.size() < 8) {
+    printf("[!] read_memory_uint64(0x%" PRIx64 ") failed (got %zu bytes)\n",
+           address, value.size());
+    return 0;
+  }
 
   return *(uint64_t *)value.data();
 }

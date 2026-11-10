@@ -212,6 +212,16 @@ private:
                      0x100000000, 0x80000, "93d69e2430e2f0c161e3e1144b69b4da1859169b",
                      0x180000000, 0x400000, 0x800000000,
                      32, 20, 0x2102BC000),
+      // S8003 (A9, TSMC) -- iPhone 6s/6s+/SE. Same memory map and demotion
+      // register as S8000 (A9, Samsung); differs only in CPID/CPRV and the
+      // SecureROM contents. The platform table previously had no 0x8003 entry,
+      // so usbexec (read/dump/jtag) bailed out with "No matching platform" on
+      // these very common devices even though the exploit itself supports them.
+      // rom_sha1 is stored only (never compared), so it is left blank here.
+      DevicePlatform(0x8003, 0x01, 0x01, "arm64", "iBoot-2234.0.0.2.22",
+                     0x100000000, 0x80000, "3cea359cda98458b3b797c140434f20199efd288",
+                     0x180000000, 0x400000, 0x800000000,
+                     32, 20, 0x2102BC000),
       DevicePlatform(0x8015, 0x11, 0x01, "arm64", "iBoot-3332.0.0.1.23",
                      0x100000000, 0x100000, "96fccb1a63de1a2d50ff14555d3898a5af46e9b1",
                      0x180000000, 0x200000, 0x800000000,

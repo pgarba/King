@@ -229,14 +229,27 @@ bool DFU::acquire_device(bool Silent)
     exit(1);
   }
 
-  char SerialNumber[2048];
-  r = libusb_get_string_descriptor_ascii(devh, desc.iSerialNumber,
-                                         (unsigned char *)SerialNumber,
-                                         sizeof(SerialNumber));
+  // The first control transfer right after (re)opening a freshly enumerated
+  // device frequently times out (LIBUSB_ERROR_TIMEOUT, -7), especially on
+  // Windows/libusbK. The second attempt almost always succeeds. Retry for a
+  // short window instead of bailing out (which previously left SerialNumber
+  // empty and made isExploited() wrongly report "not exploited").
+  char SerialNumber[2048] = {0};
+  r = LIBUSB_ERROR_TIMEOUT;
+  for (int attempt = 0; attempt < 20 && r < 0; attempt++)
+  {
+    r = libusb_get_string_descriptor_ascii(devh, desc.iSerialNumber,
+                                           (unsigned char *)SerialNumber,
+                                           sizeof(SerialNumber));
+    if (r < 0)
+    {
+      struct timespec ts = {0, 50 * 1000 * 1000}; // 50ms
+      nanosleep(&ts, NULL);
+    }
+  }
   if (r < 0)
   {
     printf("[!] libusb_get_string_descriptor_ascii error %d\n", r);
-    return true;
     exit(1);
   }
 

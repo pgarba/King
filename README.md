@@ -165,6 +165,9 @@ sudo ./king read32 0x100000280
 
 ### Enable JTAG (demote device)
 
+Demotes the SoC (clears production bit 0 of the demotion register) so a JTAG/SWD
+debugger — e.g. a LambdaConcept Bonobo cable with OpenOCD — can attach.
+
 ```
 [*] Device Serial Number: CPID:8010 ... SRTG:[iBoot-2696.0.0.1.33] PWND:[checkm8]
 [*] DemotionReg: 287
@@ -172,6 +175,21 @@ sudo ./king read32 0x100000280
 [*] New DemotionReg: 286
 [!] Succeeded to enable the JTAG!
 ```
+
+On **A9 (S8000/S8003)** the demotion register `0x2102BC000` is peripheral MMIO
+that the usbexec memcpy path faults on, so King instead invokes the SecureROM's
+own demotion routine through the exec gadget. Verified on hardware (S8003,
+iBoot-2234.0.0.2.22): the production bit flips `1 → 0`.
+
+```
+[*] A9: demoting via SecureROM routine (reg 0x2102BC000)
+[*] production bit before: 1
+[*] production bit after:  0
+[!] Succeeded to enable the JTAG! (production bit cleared)
+```
+
+> Demotion is a RAM copy of the fuses — it resets to production on any reboot /
+> fresh DFU, so re-run `checkm8` then `enable_jtag` each session.
 
 ### Decrypt and unpack an IM4P firmware image
 

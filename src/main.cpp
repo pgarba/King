@@ -820,8 +820,64 @@ void demoteDevice()
   auto SerialNumber = d.getSerialNumber();
   d.release_device();
 
-  // Set demotion reg
   USBEXEC U(SerialNumber);
+
+  // --- A9 (S8000/S8003) path -------------------------------------------
+  // On A9 the demotion register (0x2102BC000) lives in peripheral/MMIO space
+  // that the usbexec byte-memcpy gadget faults on (it returns a 0-byte
+  // response), so the generic read/modify/write path below cannot touch it.
+  //
+  // The SecureROM itself, however, accesses it with a proper aligned 32-bit
+  // ldr/str. Disassembly of the s8003 SecureROM (iBoot-2234.0.0.2.22) shows a
+  // self-contained routine that performs exactly the demotion we want:
+  //
+  //   0x10000A34C  mov  x8, #0x200000000
+  //                movk x8, #0x102b, lsl #16
+  //                movk x8, #0xc000          ; x8 = 0x2102BC000
+  //                ldr  w9, [x8]
+  //                and  w9, w9, #0xfffffffe   ; clear production bit 0
+  //                str  w9, [x8]
+  //                ret
+  //
+  //   0x10000A31C  ...reads 0x2102BC000 and returns bit 0 (production mode)
+  //
+  // Rather than poke MMIO through memcpy, we invoke these ROM routines via the
+  // exec gadget so the access is done by ROM code with the correct width.
+  if (SerialNumber.find("CPID:8003") != string::npos)
+  {
+    const uint64_t rom = U.rom_base(); // 0x100000000
+    const uint64_t ROUTINE_READ_PROD = rom + 0xA31C; // -> w0 = production bit
+    const uint64_t ROUTINE_DEMOTE    = rom + 0xA34C; // clears production bit 0
+
+    auto call_rom = [&](uint64_t func) -> uint64_t {
+      vector<vector<uint8_t>> args;
+      vector<uint8_t> f; append(f, func); args.push_back(f); // arg0 = function
+      for (int i = 0; i < 7; i++) { vector<uint8_t> z; append(z, (uint64_t)0); args.push_back(z); }
+      vector<uint8_t> out;
+      U.execute(8, args, out);
+      if (out.size() < 8) return (uint64_t)-1;
+      return *(uint64_t *)out.data();
+    };
+
+    printf("[*] A9: demoting via SecureROM routine (reg 0x2102BC000)\n");
+    uint64_t before = call_rom(ROUTINE_READ_PROD);
+    printf("[*] production bit before: 0x%" PRIx64 "\n", before);
+
+    call_rom(ROUTINE_DEMOTE);
+
+    uint64_t after = call_rom(ROUTINE_READ_PROD);
+    printf("[*] production bit after:  0x%" PRIx64 "\n", after);
+
+    if (before == (uint64_t)-1 || after == (uint64_t)-1)
+      cout << "[!] Could not read production state (exec gadget could not reach the register).\n";
+    else if (after == 0)
+      cout << "[!] Succeeded to enable the JTAG!\n";
+    else
+      cout << "[!] Demotion did not take (production bit still set).\n";
+    return;
+  }
+
+  // --- Generic path (A10/A11 etc., register reachable via memcpy) --------
   uint32_t Value = U.read_memory_uint32(U.getDemotionReg());
   printf("[*] DemotionReg: %X\n", Value);
 

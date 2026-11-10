@@ -147,6 +147,8 @@ sudo ./king checkm8
 [!] Device is now in pwned DFU Mode! :D
 ```
 
+> ⚠️ **On AMD X870 / modern all-xHCI boards, route the device through a USB 2.0 hub** — see [Running on AMD X870 & modern xHCI boards](#running-on-amd-x870--modern-xhci-boards) below.
+
 ### Read memory
 
 ```
@@ -212,6 +214,53 @@ C:\src\King\build>Release\king.exe dump-rom
 [*] Device Serial Number: CPID:7000 ... SRTG:[iBoot-1992.0.0.1.19] PWND:[checkm8]
 Saved: SecureROM-t7000si-RELEASE-1992.0.0.1.19.dump
 ```
+
+---
+
+## Running on AMD X870 & modern xHCI boards
+
+checkm8 wins a **~1 ms USB EP0 timing race**. Modern boards (e.g. AMD **X870** with a Ryzen 9000-series CPU) expose **only xHCI controllers** — there is no legacy EHCI USB 2.0 controller — and their native USB 3 ports are often *too fast and too clean* for the race to land. The exploit will run its full stage machine (RESET → SETUP → SPRAY → PATCH, looping) but **never reach `PWND`** when the device hangs directly off a USB 3 root hub.
+
+**The fix: put a real USB 2.0 hub between the device and the PC.** A genuine 2.0 hub chip forces the Lightning link down to USB 2.0 HighSpeed timing, which is what the race needs.
+
+### Step by step
+
+1. **Insert a USB 2.0 hub in the path.** Any of these work:
+   - A **Bonobo / Kanzi debug cable** — its inline USB 2.0 hub is ideal and purpose-built for this (verified working).
+   - A cheap standalone **USB 2.0 hub** (the classic 4-port kind).
+   - A **monitor/dock** with a built-in USB 2.0 hub.
+
+   > A passthrough keyboard port, a USB **3.0** hub, or a direct motherboard port will **not** work — it must be a real 2.0 hub chip.
+
+2. **Verify the hub is actually in the chain.** In PowerShell, trace the device's parent topology:
+   ```powershell
+   $d = Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match 'VID_05AC' }
+   $cur = $d.InstanceId
+   while ($cur) {
+     $p = Get-PnpDevice -InstanceId $cur -ErrorAction SilentlyContinue
+     if (-not $p) { break }
+     "  $($p.FriendlyName)  ($($p.Class))"
+     $cur = (Get-PnpDeviceProperty -InstanceId $cur -KeyName 'DEVPKEY_Device_Parent' -ErrorAction SilentlyContinue).Data
+   }
+   ```
+   You should see a **`Generic USB Hub`** node between the Apple device and the root hub. If you only see `USB Root Hub (USB 3.0) → AMD USB 3.10 eXtensible Host Controller`, the device is still direct — the hub isn't really in the path.
+
+3. **Bind the libusbK driver** to the device in DFU mode with [Zadig](https://zadig.akeo.ie/) (do this *after* it's behind the hub, since the USB path changes).
+
+4. **Run from an elevated prompt:**
+   ```
+   king.exe checkm8
+   ```
+
+5. **If control transfers stall / it hangs on `Waiting for the USB handle`**, re-enter DFU (or replug the device) once while King is waiting — Windows sometimes needs a fresh enumeration before it grabs the handle. King auto-retries and will latch on.
+
+6. **Confirm success** — the device's own ID string ends with `PWND:[CHECKM8]`:
+   ```powershell
+   (Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match 'VID_05AC' }).InstanceId
+   # ...SRTG:[IBOOT-...]_PWND:[CHECKM8]
+   ```
+
+> These reliability fixes (interface claim + `timeBeginPeriod(1)` timer resolution) are built into King; the USB 2.0 hub is the only extra hardware step needed on these boards.
 
 ---
 

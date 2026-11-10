@@ -126,6 +126,12 @@ public:
 
   vector<uint8_t> command(vector<uint8_t> request_data, size_t response_length);
 
+  /*
+        Call an on-device function via the exec gadget, return its x0 result.
+  */
+  uint64_t rom_call(uint64_t func, uint64_t x0 = 0, uint64_t x1 = 0,
+                    uint64_t x2 = 0, uint64_t x3 = 0);
+
   uint64_t cmd_arg_type();
   uint64_t cmd_arg_size();
 

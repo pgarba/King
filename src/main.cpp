@@ -848,30 +848,29 @@ void demoteDevice()
     const uint64_t rom = U.rom_base(); // 0x100000000
     const uint64_t ROUTINE_READ_PROD = rom + 0xA31C; // -> w0 = production bit
     const uint64_t ROUTINE_DEMOTE    = rom + 0xA34C; // clears production bit 0
+    const uint64_t ROUTINE_CPID      = rom + 0xA3C8; // -> w0 = 0x8003 (sanity)
 
-    auto call_rom = [&](uint64_t func) -> uint64_t {
-      vector<vector<uint8_t>> args;
-      vector<uint8_t> f; append(f, func); args.push_back(f); // arg0 = function
-      for (int i = 0; i < 7; i++) { vector<uint8_t> z; append(z, (uint64_t)0); args.push_back(z); }
-      vector<uint8_t> out;
-      U.execute(8, args, out);
-      if (out.size() < 8) return (uint64_t)-1;
-      return *(uint64_t *)out.data();
-    };
+    // Sanity: the ROM CPID getter is `mov w0,#0x8003; ret`. If exec is working
+    // and returning real values this comes back 0x8003.
+    uint64_t cpid = U.rom_call(ROUTINE_CPID);
+    if (cpid != 0x8003)
+    {
+      printf("[!] exec gadget not returning results (CPID probe=0x%" PRIx64 ", expected 0x8003)\n", cpid);
+      cout << "[!] Cannot demote.\n";
+      return;
+    }
 
     printf("[*] A9: demoting via SecureROM routine (reg 0x2102BC000)\n");
-    uint64_t before = call_rom(ROUTINE_READ_PROD);
-    printf("[*] production bit before: 0x%" PRIx64 "\n", before);
+    uint64_t before = U.rom_call(ROUTINE_READ_PROD) & 1;
+    printf("[*] production bit before: %" PRIu64 "\n", before);
 
-    call_rom(ROUTINE_DEMOTE);
+    U.rom_call(ROUTINE_DEMOTE);
 
-    uint64_t after = call_rom(ROUTINE_READ_PROD);
-    printf("[*] production bit after:  0x%" PRIx64 "\n", after);
+    uint64_t after = U.rom_call(ROUTINE_READ_PROD) & 1;
+    printf("[*] production bit after:  %" PRIu64 "\n", after);
 
-    if (before == (uint64_t)-1 || after == (uint64_t)-1)
-      cout << "[!] Could not read production state (exec gadget could not reach the register).\n";
-    else if (after == 0)
-      cout << "[!] Succeeded to enable the JTAG!\n";
+    if (after == 0)
+      cout << "[!] Succeeded to enable the JTAG! (production bit cleared)\n";
     else
       cout << "[!] Demotion did not take (production bit still set).\n";
     return;

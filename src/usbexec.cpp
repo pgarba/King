@@ -301,6 +301,24 @@ void USBEXEC::aes(vector<uint8_t> data, int action, int key,
   execute(data.size(), args, Out);
 }
 
+uint64_t USBEXEC::rom_call(uint64_t func, uint64_t x0, uint64_t x1,
+                           uint64_t x2, uint64_t x3) {
+  // Invoke an on-device function via the exec gadget and return its result.
+  // Exec response layout (confirmed on s8003): [0:8]=DONE_MAGIC,
+  // [8:16]=return value (x0), [16:]=output buffer.
+  vector<uint8_t> cmd;
+  uint8_t *S = (uint8_t *)&EXEC_MAGIC;
+  cmd.insert(cmd.end(), S, S + 8);
+  uint64_t regs[8] = {func, x0, x1, x2, x3, 0, 0, 0};
+  for (int i = 0; i < 8; i++)
+    append(cmd, regs[i]);
+
+  auto result = command(cmd, cmd_data_offset(0) + 8);
+  if (result.size() < 16)
+    return (uint64_t)-1;
+  return *(uint64_t *)(result.data() + 8);
+}
+
 void USBEXEC::execute(size_t response_length, vector<vector<uint8_t>> args,
                       vector<uint8_t> &Out) {
   // Build up cmd buffer
@@ -319,9 +337,6 @@ void USBEXEC::execute(size_t response_length, vector<vector<uint8_t>> args,
   printBuffer(cmd);
 
   auto result = command(cmd, cmd_data_offset(0) + response_length);
-
-  // Verify result
-  printBuffer(result);
 
   if (result.size() < 8 && (*(uint64_t *)result.data()) != DONE_MAGIC) {
     cout << "[!] Wrong response retrieved. Aborting!\n";

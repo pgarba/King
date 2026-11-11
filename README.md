@@ -106,14 +106,42 @@ The result, `build/Release/king.exe`, is self-contained (static libusb + static 
 
 ### Linux / macOS
 
+Linux is the simplest and most reliable target — it talks to the device through
+libusb directly, so there's **no driver binding** (no Zadig/libusbK/WinUSB), no
+driver "flip" after the pwn, and the exploit timing is naturally good (none of
+Windows' timer-quantization issues).
+
+**1. Install libusb**
 ```bash
-mkdir build && cd build
-cmake ..
-make
-cp -R ../bin .
+sudo apt install build-essential cmake libusb-1.0-0-dev   # Debian/Ubuntu
+# macOS:  brew install libusb cmake
 ```
 
-On Linux, install `libusb-1.0` via your package manager (e.g. `sudo apt install libusb-1.0-0-dev`). On macOS use `brew install libusb`.
+**2. Build**
+```bash
+cmake -S . -B build
+cmake --build build
+cp -R bin build/          # payloads must sit next to the binary
+```
+
+**3. (Optional) udev rule so you don't need `sudo`** — Linux only:
+```bash
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", MODE="0666"' | \
+  sudo tee /etc/udev/rules.d/97-apple-dfu.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+Without the rule, just run King with `sudo`.
+
+**4. Run** (device in DFU)
+```bash
+sudo ./build/king checkm8        # -> PWND:[checkm8]
+sudo ./build/king dump-rom
+sudo ./build/king enable_jtag    # demote -> JTAG unlocked
+```
+
+> The same checkm8 reliability tips apply on any OS: on modern all-xHCI boards,
+> routing the device through a **USB 2.0 hub** helps the exploit land. On Linux
+> this matters less than on Windows, but it's still the most robust path.
 
 ---
 
